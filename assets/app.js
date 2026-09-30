@@ -326,19 +326,33 @@
   function infiniteShift(list) {
     if (list.__shifting) return;
     var seps = list.querySelectorAll('.daysep');
-    if (seps.length < 20) return;
+    if (seps.length < 40) return;
     var cycle = innerOffset(list, seps[10]) - innerOffset(list, seps[0]);
     if (cycle <= 0) return;
-    // 缓冲区比一屏高一点就够，不要用一整个周期 ——
-    // 否则"定位到某一天"这种正常滚动也会被误判成撞边界。
-    var margin = Math.max(200, list.clientHeight);
-    list.__shifting = true;
-    try {
-      var max = list.scrollHeight - list.clientHeight;
-      if (list.scrollTop < margin) list.scrollTop += cycle;
-      else if (list.scrollTop > max - margin) list.scrollTop -= cycle;
-    } finally {
-      list.__shifting = false;
+    var max = list.scrollHeight - list.clientHeight;
+    var guard = 0;
+    while (guard++ < 4) {
+      // 只在**真正贴近两端的那一个周期内**才回卷
+      var need = (list.scrollTop < cycle) ? 1
+        : (list.scrollTop + list.clientHeight > list.scrollHeight - cycle) ? -1 : 0;
+      if (!need) break;
+      // 回卷到**整条时间轴的正中间**，并保持"周期内的偏移"不变 ——
+      // 10 天一个循环，平移整数个周期画面完全一样。
+      //
+      // ⚠ 这里必须"一次回卷到位"，不能一次只挪一两个周期之后再看：
+      //   只挪一点的话，挪完仍然落在边界那一个周期里，下一次 scroll 又满足条件、
+      //   再挪 —— 两次挪动方向还可能相反，用户就看到日期来回跳
+      //   （报的"滚到 10月26日 又回到 10月16日"）。
+      var mid = Math.round((max / 2 - list.scrollTop) / cycle) * cycle;
+      var next = list.scrollTop + mid;
+      // 兜底：万一 mid 是 0，就往该去的方向挪两个周期
+      if (mid === 0) next = list.scrollTop + need * cycle * 2;
+      if (next < 0) next = 0;
+      if (next > max) next = max;
+      if (next === list.scrollTop) break;
+      list.__shifting = true;
+      try { list.scrollTop = next; } finally { list.__shifting = false; }
+      break;
     }
   }
 
