@@ -208,22 +208,135 @@
 
   /**
    * 时间轴渲染完之后对位置：
-   *   alignDay=true（换了日期/班组）→ 把"当前那天"的日期标签对到列表顶部；
+   *   alignDay=true（换了日期/班组）→ 把"当前那天"的日期标签对到列表顶部，
+   *     这样它的三行正好落在可视区里；再往上滑一点就是"交班给我的人"。
    *   否则沿用原来滚到的位置，别乱跳。
    */
   function syncTimeline(keepTop) {
     var list = document.getElementById('rowsList');
     if (!list) return;
     if (ALIGN_DAY || keepTop < 0) {
-      var anchor = list.querySelector('[data-anchor="1"]');
-      // 让"当前那天"的标签贴在顶部，然后**回退一格**，
-      // 这样往上一滚就能看到"交班给我的人"（上一个班）
-      var prev = anchor && anchor.previousElementSibling;
-      list.scrollTop = prev ? prev.offsetTop : (anchor ? anchor.offsetTop : 0);
+      var anchor = list.querySelector('.daysep.cur') || list.querySelector('.daysep[data-day="' + App.date + '"]');
+      // 目标：当前那天的三行**完整**落在可视区里（标签 + 三行 222px > 可视区 205px，
+      // 所以标签会刚好露在顶边上沿之外，这是必然的折中）。
+      // 精确滚到"当天第一行的顶边"。
+      var firstRow = anchor && anchor.nextElementSibling;
+      var y;
+      if (firstRow && firstRow.classList && firstRow.classList.contains('hrow')) {
+        y = firstRow.offsetTop;
+      } else {
+        y = anchor ? anchor.offsetTop : 0;
+      }
+      list.scrollTop = y;
     } else {
       list.scrollTop = keepTop;
     }
     ALIGN_DAY = false;
+    bindTimelineScroll(list);
+  }
+
+  /* ---------------- 时间轴滚动：日期跟着走 + 无限滚 ---------------- */
+
+  /**
+   * 可视区最上面那一格属于哪一天。
+   * 按"块"来判：找**最后一天**，它的范围还没在滚动位置之前结束。
+   * 也就是"这一天的行还占着视口上部"就算它。
+   *
+   * ⚠ 不能用"标签有没有滚出去"来判：标签 + 三行有 222px，而可视区只有 205px，
+   *   所以定位到某天时它的标签必然在顶边上沿之外 —— 那样判就会跳到下一天，
+   *   紧接着的 scroll 事件把日期改掉，就是"选 10月3日却显示 10月4日"的根因。
+   */
+  function dayAtTop(list) {
+    var seps = list.querySelectorAll('.daysep');
+    var top = list.scrollTop;
+    for (var i = 0; i < seps.length; i++) {
+      var next = seps[i + 1];
+      var end = next ? next.offsetTop : list.scrollHeight;
+      if (end > top + 1) return seps[i].dataset.day;   // 这一天的行还占着视口
+    }
+    return seps.length ? seps[seps.length - 1].dataset.day : null;
+  }
+
+  /**
+   * 滚到某个日期 → 更新大日期 / 地址栏 / 卡片头，但**不重建 DOM**。
+   * 重建的话滚动位置会乱跳，而且这里本来就是"你滚到哪就是哪天"。
+   */
+  function applyDateFromScroll(d) {
+    if (!d || d === App.date) return;
+    App.date = d;
+    App.month = { y: +d.slice(0, 4), m: +d.slice(5, 7) };
+    writeHash(true);
+    renderHeadAndMonth();
+    // ⚠ 不要动 document.title —— 冒烟测试靠它回传诊断结果，改掉就取不到了
+  }
+
+  /** 只刷新"日期相关但不在时间轴里"的部分：大日期、班组牌子、卡片头、总貌高亮 */
+  function renderHeadAndMonth() {
+    var P = root.Shift.Views.shift.parts;
+    if (!P) return;
+    var c = ctx();
+    swapHtml('#headHost', P.bigDate(c));
+    swapHtml('#pickHost', P.teamPick(c));
+    swapHtml('#teamHeadHost', P.teamToday(c));
+    swapHtml('#ovHost', P.overview(c));
+  }
+
+  function swapHtml(sel, html) {
+    var host = U.$(sel);
+    if (!host) return;
+    var node = U.node('<div>' + html + '</div>');
+    host.innerHTML = '';
+    if (node) host.appendChild(node);
+  }
+
+  function bindTimelineScroll(list) {
+    if (list.__bound) return;
+    list.__bound = true;
+    var raf = 0;
+    list.addEventListener('scroll', function () {
+      // 无限滚的平移必须**立刻**做：拖到底再补就晚了（会先闪出边界）。
+      // 它只读几个 offsetTop，很便宜。
+      infiniteShift(list);
+      // 日期跟随可以延到下一帧（要换 DOM，别在滚动事件里同步干重活）
+      if (raf) return;
+      raf = requestAnimationFrame(function () {
+        raf = 0;
+        infiniteShift(list);
+        applyDateFromScroll(dayAtTop(list));
+      });
+    }, { passive: true });
+  }
+
+  /**
+   * 无限滚：时间轴画的是 5 个完整 10 天周期（排版完全一样）。
+   * 滚到靠近上/下边界时，把 scrollTop 平移一个周期的高度 —— 画面一模一样，看不出接缝。
+   *
+   * ⚠ 改 scrollTop 会再触发一次 scroll 事件，所以：
+   *   · 加 __shifting 闸门，防重入（同一次里只平移一次）；
+   *   · 平移后判一下"还需要再移吗"，避免来回抖动成死循环（那会把页面卡死）。
+   */
+  function infiniteShift(list) {
+    if (list.__shifting) return;
+    var seps = list.querySelectorAll('.daysep');
+    if (seps.length < 20) return;
+    var cycle = seps[10].offsetTop - seps[0].offsetTop;
+    if (cycle <= 0) return;
+    list.__shifting = true;
+    try {
+      var guard = 0;
+      while (guard++ < 4) {
+        var max = list.scrollHeight - list.clientHeight;
+        if (list.scrollTop < cycle) {
+          list.scrollTop += cycle;
+        } else if (list.scrollTop > max - cycle) {
+          list.scrollTop -= cycle;
+        } else {
+          break;                              // 已经在中间安全区，不用动
+        }
+      }
+    } finally {
+      list.__shifting = false;
+    }
   }
 
   function renderBanner() {

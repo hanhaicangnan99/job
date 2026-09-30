@@ -126,9 +126,6 @@
     return rows;
   }
 
-  /** 时间轴窗口：当前那天前后各展开几天，可以上下滚着看接班关系 */
-  var BEFORE = 2, AFTER = 4;
-
   /**
    * 连续时间轴：一条竖着的清单，从「前几天」一直排到「后几天」，
    * 中间用日期小标签分隔。每一格就是一个班（谁上、几点到几点）。
@@ -138,12 +135,20 @@
    *   白班 18:55 交给中班 → …
    * 只看"当天三行"是切不出接班关系的（我那行在中间时，上下两头都被切断）。
    * 展开成时间轴后，往下一滚就能看见"谁接我的班"。
+   *
+   * 为了能"无限滚"，这里画的是 **5 个完整的 10 天周期**（共 50 天）。
+   * 10 天一个循环，所以每 10 天的排版完全一样；滚到边界时只要把 scrollTop
+   * 平移一个周期的高度，画面看不出任何变化 —— 于是就是无限滚了。
    */
+  var CYCLE_COPIES = 5;
+  var COPIES_BEFORE = 2;                 // 先画 2 个周期当前面，留出往回滚的余量
+
   function timeline(ctx) {
     var today = S.todayStr();
+    var start = S.addDays(ctx.date, -10 * COPIES_BEFORE);
     var blocks = [];
-    for (var n = -BEFORE; n <= AFTER; n++) {
-      var d = S.addDays(ctx.date, n);
+    for (var n = 0; n < 10 * CYCLE_COPIES; n++) {
+      var d = S.addDays(start, n);
       blocks.push({ d: d, segs: dayRows(ctx, d) });
     }
 
@@ -161,8 +166,8 @@
     var out = [], idx = 0;
     for (var b2 = 0; b2 < blocks.length; b2++) {
       var d2 = blocks[b2].d;
-      out.push('<div class="daysep' + (d2 === ctx.date ? ' cur' : '') + '" data-anchor="' +
-        (d2 === ctx.date ? '1' : '0') + '" data-day="' + d2 + '">' +
+      out.push('<div class="daysep' + (d2 === ctx.date ? ' cur' : '') +
+        '" data-day="' + d2 + '">' +
         '<span class="dsdate">' + S.mdLabel(d2) + '</span>' +
         '<span class="dswd">' + S.weekday(d2) + '</span>' +
         (d2 === today ? '<span class="dstoday">今天</span>' : '') +
@@ -279,17 +284,17 @@
   }
 
   /* ================================================================== */
+  /* 各块的 id 挂点：滚动时只换这几块，时间轴那一条不动（不然滚动位置会乱跳） */
   function render(ctx) {
-    var i = ctx.teamIndex;
     var out = [];
     out.push('<div class="main-col">');
-    out.push(bigDate(ctx));
-    out.push(teamPick(ctx));
+    out.push('<div id="headHost">' + bigDate(ctx) + '</div>');
+    out.push('<div id="pickHost">' + teamPick(ctx) + '</div>');
     // 班次卡：头上写明"正在看的这个班组今天什么班"，下面是可以上下滚的连续时间轴
-    out.push('<div class="card tight rows-card">' + teamToday(ctx) +
+    out.push('<div class="card tight rows-card"><div id="teamHeadHost">' + teamToday(ctx) + '</div>' +
       '<div class="hlist" id="rowsList">' + timeline(ctx) + '</div></div>');
     out.push('</div>');
-    out.push('<div class="ov-col">' + overview(ctx) + '</div>');
+    out.push('<div class="ov-col" id="ovHost">' + overview(ctx) + '</div>');
     return out.join('');
   }
 
@@ -297,5 +302,11 @@
     /* 事件都由 app.js 在 #view 上统一委托 */
   }
 
-  return { id: 'shift', title: '倒班日历', render: render, mount: mount };
+  return {
+    id: 'shift', title: '倒班日历', render: render, mount: mount,
+    // 滚动时按需局部刷新用
+    parts: {
+      bigDate: bigDate, teamPick: teamPick, teamToday: teamToday, overview: overview
+    }
+  };
 }));
