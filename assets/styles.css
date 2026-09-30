@@ -48,7 +48,8 @@ body {
   color: var(--ink);
   font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
         "Hiragino Sans GB", "Microsoft YaHei", "微软雅黑", sans-serif;
-  padding-bottom: calc(var(--tab-h) + var(--safe-b) + 12px);
+  /* 没有底部标签栏了，只留一点点呼吸位；总貌那一块自己贴在视口底部 */
+  padding-bottom: 8px;
   overscroll-behavior-y: none;
 }
 h1, h2, h3 { margin: 0; font-weight: 600; }
@@ -80,6 +81,33 @@ button, input, select { font: inherit; color: inherit; }
 }
 .datebar .label { flex: 1; text-align: center; font-size: 14px; font-weight: 600; cursor: pointer; }
 .datebar .label small { display: block; font-weight: 400; font-size: 11px; opacity: .85; line-height: 1.5; }
+
+/* ===================== 页面骨架：把总貌钉在页面下方 ===================== */
+/*
+ * 目标：不管班次卡是 3 行还是 4 行，总貌图都停在**同一个位置、屏幕下方**，不上下跳。
+ * 数字都是 390×844 实测出来的，不是估的：
+ *   班次卡 hlist = 251px（4 行时的自然高度）→ 设成 min-height，
+ *     3 行时多出来的 77px 用 justify-content: center 摊到上下，整张卡就恒定 312px；
+ *   地面上方（顶栏 75 + 日期区 88 + 班组条 61 + 卡 312 + 边距 76）= 644px，
+ *     再加总貌自己 227px（月份行 + 表格 159 + 图例）≈ 871px。
+ * 所以主列（日期 + 班组 + 班次卡）撑满「视口高 − 总貌占的 220px」，
+ * 总貌用 margin-top: auto 沉到剩余空间的底部。
+ * 内容比一屏高时（比如小屏机）总貌会贴住视口底边（sticky），一直看得见。
+ */
+.main-col { display: flex; flex-direction: column; min-height: calc(100vh - 220px); }
+.ov-col {
+  margin-top: auto;
+  position: sticky; bottom: 0; z-index: 2;
+  background: var(--bg);
+  padding-top: 6px;
+  box-shadow: 0 -6px 12px -8px rgba(22, 32, 43, .18);
+}
+.hlist { min-height: 251px; justify-content: center; }
+
+/* ===================== 日期条 / 班组条：高度固定，不随内容变 ===================== */
+.datebar2 { min-height: 54px; }
+.datebar3 { min-height: 34px; }
+.teampick { min-height: 61px; }
 
 /* ===================== 班组选择器 ===================== */
 .teampick {
@@ -135,7 +163,7 @@ button, input, select { font: inherit; color: inherit; }
   border: 1px solid var(--line); border-radius: var(--r-sm);
   padding: 8px 10px; background: #fbfcfe;
 }
-.hrow .hname { flex: none; width: 84px; font-size: 14px; font-weight: 600; color: var(--ink-2); }
+.hrow .hname { flex: none; width: 84px; font-size: 14px; font-weight: 600; color: var(--ink-2); white-space: nowrap; }
 .hrow .hmid { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .hrow .htime { font-size: 13px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
 .hrow .htag {
@@ -149,7 +177,7 @@ button, input, select { font: inherit; color: inherit; }
   background: linear-gradient(180deg, #f2f7ff 0%, #e8f0fd 100%);
   border: 2px solid var(--navy); padding: 11px 10px;
 }
-.hrow.mine .hname { font-size: 20px; color: var(--navy); width: 104px; letter-spacing: .5px; }
+.hrow.mine .hname { font-size: 20px; color: var(--navy); width: 126px; letter-spacing: .5px; white-space: nowrap; }
 .hrow.mine .chip { font-size: 14px; padding: 6px 12px; }
 .hrow.mine .htime { font-size: 17px; font-weight: 700; color: var(--navy); }
 .hrow.mine .htag { font-size: 11.5px; padding: 3px 8px; background: var(--navy); color: #fff; }

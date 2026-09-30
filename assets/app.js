@@ -53,11 +53,27 @@
     });
     return out;
   }
+  /**
+   * 我们每次写地址栏时，都在 history.state 里放一个递增的 __v（版本号）。
+   *
+   * 为什么需要它：日历弹层（U.sheet）打开时会 pushState 压一条自己的记录，
+   * 关闭时用 history.back() 撤回 —— 为的是让安卓返回键能关弹层。
+   * 但那个 back 引发的 popstate 是**异步**的：用户在弹层里点了日期、
+   * 应用刚 replaceState 过 URL，6 毫秒后这个 popstate 到达，
+   * 就会把 URL 和界面一起打回旧值 —— 真机上表现为「点了日期不跳转」。
+   *
+   * 光比 URL 分不清：弹层 back 之后 URL 恰好和"刚写进去的"长得一样。
+   * 比 state 里的 __v 就能分清 —— 弹层回退到的是**旧版本**那条记录，直接跳过。
+   */
+  var HASH_V = 0;
+
   function writeHash(replace) {
     var hash = '#/shift?d=' + App.date + '&team=' + 'ABCDE'.charAt(App.team);
+    HASH_V++;
+    var st = { __v: HASH_V, d: App.date, team: App.team };
     try {
-      if (replace) history.replaceState(null, '', hash);
-      else history.pushState(null, '', hash);
+      if (replace) history.replaceState(st, '', hash);
+      else history.pushState(st, '', hash);
     } catch (e) { location.hash = hash; }
   }
   App.shareLink = function () {
@@ -83,11 +99,24 @@
     bindGlobals();
     render();
 
-    window.addEventListener('popstate', function () {
+    window.addEventListener('popstate', function (ev) {
+      // 只有「我们写进去的那条记录」或「更早的历史」才重新读地址栏。
+      // 弹层关闭时 history.back() 撤回的是它自己那条旧记录（__v 比当前小），
+      // 这种情况跳过 —— 否则会把刚选好的日期打回去（见 writeHash 上面的注释）。
+      var v = ev && ev.state && ev.state.__v;
+      if (v != null && v < HASH_V) {
+        // 界面不动，但把地址栏补回当前状态，免得 URL 和界面不一致
+        try {
+          history.replaceState({ __v: HASH_V, d: App.date, team: App.team }, '',
+            '#/shift?d=' + App.date + '&team=' + 'ABCDE'.charAt(App.team));
+        } catch (e) {}
+        return;
+      }
       var x = parseHash();
       if (x.team != null) App.team = x.team;
       if (x.d) App.date = x.d;
       if (x.y && x.m) App.month = { y: x.y, m: x.m };
+      if (v != null) HASH_V = v;
       render();
     });
 

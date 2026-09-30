@@ -141,7 +141,6 @@
     var today = S.todayStr();
     var out = [];
 
-    out.push('<div class="sect-title">总貌 · 点格子换日期</div>');
     out.push('<div class="row between mb10">' +
       '<button class="btn sm" data-act="prev-month">‹ 上月</button>' +
       '<b>' + U.monthLabel(m.y, m.m) + '</b>' +
@@ -185,12 +184,14 @@
   function render(ctx) {
     var i = ctx.teamIndex;
     var out = [];
+    out.push('<div class="main-col">');
     out.push(bigDate(ctx));
     out.push(teamPick(ctx));
     out.push(U.card(monthTitle(ctx),
       '<div class="hlist">' + shiftRows(ctx, i).map(shiftRow).join('') + '</div>',
       { rawTitle: true }));
-    out.push(overview(ctx));
+    out.push('</div>');
+    out.push('<div class="ov-col">' + overview(ctx) + '</div>');
     return out.join('');
   }
 
