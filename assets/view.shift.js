@@ -41,6 +41,11 @@
    *    右边那个「我的」按钮也拿掉了，这一栏只留 1～5值班。
    *    要看自己那个班被重点标出来的话，长按某个值班按钮认一下就行（可选，不按就没有"我"）。
    * ================================================================== */
+  /* ==================================================================
+   * 2) 值班那一栏：**只是展示**，不能点。
+   *    这里写清 1～5值班当天各是什么班 —— 选不了班组，也就没有"正在看哪个班"这回事。
+   *    （之前的点按切换和黑框已经去掉；认自己的班组改成纯长按那个值班格子，可选。）
+   * ================================================================== */
   function teamPick(ctx) {
     var d = ctx.date;
     var mine = ctx.myTeam;                    // null = 没认过
@@ -48,13 +53,12 @@
       S.TEAMS.map(function (name, i) {
         var sh = S.shiftOf(d, i);
         var isMe = i === mine;
-        return '<button type="button" data-team="' + i + '"' +
-          (i === ctx.teamIndex ? ' class="on"' : '') +
-          (isMe ? ' data-me="1"' : '') +
+        return '<b class="teamcell' + (isMe ? ' is-me' : '') + '"' +
+          ' data-me-index="' + i + '"' +
           ' title="' + U.esc(name + (isMe ? '（我的班组）' : '') + ' · 长按认作我的班组') + '">' +
-          '<b>' + U.esc(name) + '</b>' +
+          '<span class="tn">' + U.esc(name) + '</span>' +
           '<span class="ic ' + S.SHIFT_CLASS[sh] + '">' + U.esc(S.SHIFT_BADGE[sh]) + '</span>' +
-          '</button>';
+          '</b>';
       }).join('') +
       '</div></div>';
   }
@@ -62,15 +66,10 @@
   /* ==================================================================
    * 3) 本日一览：固定 夜班 → 白班 → 中班
    * ================================================================== */
-  /** 某一天在岗的三个班（夜→白→中），按班组视角定"我" */
+  /** 某一天在岗的三个班（夜→白→中）；"我"就是我的班组（myTeam），没认过就谁都不标 */
   function dayRows(ctx, d) {
-    var now = ctx.onDutyNow;
-    // "我"是**我的班组**（myTeam），不是"正在看的那个班组"（ctx.teamIndex）——
-    // 切到别人班去看的时候，不能在别人那一行上标"我"。
-    // myTeam 为 null 表示还没认过，那就谁都不标。
+    // myTeam 为 null 表示还没认过，那就谁都不标
     var me = ctx.myTeam == null ? null : ctx.myTeam;
-    var isTarget = (d === ctx.date);
-    var onNow = !!(me != null && isTarget && now && now.index === me);
     var order = ['夜', '白', '中'];
     var rows = [];
 
@@ -102,9 +101,6 @@
     // 注意：这里**不再**补"我这一天休息"那一行。
     // 时间轴上每天就是当天在岗的三个班（夜→白→中），我那天的班次看
     // 卡片头上写的那一行，或者看值班按钮上的字就够了。
-    for (var r2 = 0; r2 < rows.length; r2++) {
-      if (onNow && rows[r2].index === me && !rows[r2].rest) { rows[r2].now = true; rows[r2].range = now.range; }
-    }
     return rows;
   }
 
@@ -191,9 +187,10 @@
    * 4) 总貌图：当月 5 个班组 × 每一天
    * ================================================================== */
   function overview(ctx) {
-    var m = ctx.month, i = ctx.teamIndex;
+    var m = ctx.month;
     var mx = S.monthMatrix(m.y, m.m);
     var today = S.todayStr();
+    var myRow = ctx.myTeam == null ? null : ctx.myTeam;
     var out = [];
 
     out.push('<div class="row between mb6">' +
@@ -212,7 +209,7 @@
     head += '</tr>';
 
     var body = mx.rows.map(function (row) {
-      var tr = '<tr' + (row.index === i ? ' class="mine"' : '') + '>' +
+      var tr = '<tr' + (row.index === myRow ? ' class="mine"' : '') + '>' +
         '<th class="stickyc">' + U.esc(row.short) + '</th>';
       for (var k = 0; k < row.cells.length; k++) {
         var c = row.cells[k];

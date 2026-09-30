@@ -96,39 +96,38 @@ button, input, select { font: inherit; color: inherit; }
 .datebar2 { min-height: 46px; }
 .teampick { min-height: 60px; }
 
-/* ===================== 班组选择器 ===================== */
+/* ===================== 值班那一栏（只展示，不能点） ===================== */
+/* 这里写清 1～5值班当天各是什么班。
+   点按切换班组和那个黑框都已经去掉了 —— 它不是选择器，是信息栏。
+   认自己的班组改为长按某个格子（可选），认过的格子带绿边和「·我」。 */
 .teamrow { display: flex; align-items: stretch; gap: 6px; margin-top: 18px; }
 .teampick {
   display: flex; gap: 4px; overflow-x: auto; -webkit-overflow-scrolling: touch;
   scrollbar-width: none; flex: 1; min-width: 0; padding-bottom: 1px;
 }
 .teampick::-webkit-scrollbar { display: none; }
-.teampick button {
+.teamcell {
   flex: 1 0 auto; min-width: 52px; border-radius: 9px;
   background: var(--card); color: var(--ink-2);
   display: flex; flex-direction: column; align-items: center; gap: 0;
   padding: 3px 4px 3px; font-size: 11px; position: relative;
-  border: 1px solid var(--line);
+  border: 1px solid var(--line); cursor: default;
 }
-.teampick button b { font-weight: 600; font-size: 11.5px; white-space: nowrap; }
-.teampick button .ic {
+.teamcell .tn { font-weight: 600; font-size: 11.5px; white-space: nowrap; }
+.teamcell .ic {
   width: 22px; height: 22px; border-radius: 7px; display: grid; place-items: center;
   font-size: 13px; font-weight: 700; background: var(--line); color: var(--ink-2);
 }
-
-/* 「我的」按钮已经不放了：这一栏就 1值班～5值班。
-   （右上角那个小标也早就删了 —— 那一行是横向滚动容器，负偏移的标会被裁掉一半。）
-   要认自己的班组就长按某个值班按钮，认过的那个会带 data-me 标记。 */
-.teampick button.pressing { border-color: var(--navy); background: #eef3fb; }
-.teampick button[data-me] { border-color: var(--ok); }
-.teampick button[data-me] b::after {
+.teamcell .ic.day { background: rgba(217,131,36,.16); color: var(--shift-day); }
+.teamcell .ic.mid { background: rgba(154,75,191,.16); color: var(--shift-mid); }
+.teamcell .ic.night { background: rgba(91,75,196,.16); color: var(--shift-night); }
+.teamcell .ic.off { background: rgba(74,158,106,.16); color: var(--shift-off); }
+/* 长按中 / 已认作我的班组 */
+.teamcell.pressing { border-color: var(--navy); background: #eef3fb; }
+.teamcell.is-me { border-color: var(--ok); }
+.teamcell.is-me .tn::after {
   content: '·我'; font-size: 9.5px; font-weight: 600; color: var(--ok); margin-left: 1px;
 }
-.teampick button .ic.day { background: rgba(217,131,36,.16); color: var(--shift-day); }
-.teampick button .ic.mid { background: rgba(154,75,191,.16); color: var(--shift-mid); }
-.teampick button .ic.night { background: rgba(91,75,196,.16); color: var(--shift-night); }
-.teampick button .ic.off { background: rgba(74,158,106,.16); color: var(--shift-off); }
-.teampick button.on { border-color: var(--navy); box-shadow: 0 0 0 1px var(--navy) inset; color: var(--navy); }
 
 /* ===================== 大日期（今天页的主角） ===================== */
 .datebar2 { display: flex; align-items: stretch; gap: 6px; margin-top: 6px; }
@@ -454,27 +453,6 @@ table.mx td.shiftcell.issel { outline: 2px solid var(--navy); outline-offset: -2
   padding: 8px 12px; display: flex; gap: 8px; align-items: center;
 }
 
-/* ===================== 底部标签栏 ===================== */
-.tabbar {
-  position: fixed; left: 0; right: 0; bottom: 0; z-index: 50;
-  height: calc(var(--tab-h) + var(--safe-b));
-  padding-bottom: var(--safe-b);
-  background: rgba(255,255,255,.96);
-  backdrop-filter: saturate(180%) blur(12px);
-  border-top: 1px solid var(--line);
-  display: flex;
-}
-.tabbar button {
-  flex: 1; border: 0; background: transparent; color: var(--muted);
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 1px; font-size: 10.5px; padding: 0; position: relative;
-}
-.tabbar button .ic { font-size: 19px; line-height: 1.1; }
-.tabbar button.on { color: var(--navy); font-weight: 600; }
-.tabbar button.on::after {
-  content: ''; position: absolute; top: 4px; width: 18px; height: 3px;
-  border-radius: 2px; background: var(--navy);
-}
 
 /* ===================== 其他 ===================== */
 .muted { color: var(--muted); }

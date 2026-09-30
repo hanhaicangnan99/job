@@ -9,7 +9,6 @@
   'use strict';
   var S = root.Shift, U = root.Shift.UI;
 
-  var KEY_TEAM = 'shift:team';        // 当前选中的班组（0..4）
   var KEY_MY = 'shift:myTeam';        // 「我的班组」（0..4，空 = 没设过）
 
   var App = {
@@ -17,8 +16,7 @@
     view: 'shift',
     date: S.todayStr(),
     month: null,                      // {y, m} 总貌当前看的月份
-    team: S.MY_TEAM,                   // 默认二值班（下标，0 = 一值班）
-    myTeam: null
+    myTeam: null                      // 只记"我的班组"；没有"正在看哪个班组"
   };
   root.Shift.App = App;
   root.__APP__ = App;
@@ -85,18 +83,18 @@
    */
   var HASH_V = 0;
 
+  /** 地址栏里只带日期（没有"正在看哪个班组"这回事了） */
   function writeHash(replace) {
-    var hash = '#/shift?d=' + App.date + '&team=' + 'ABCDE'.charAt(App.team);
+    var hash = '#/shift?d=' + App.date;
     HASH_V++;
-    var st = { __v: HASH_V, d: App.date, team: App.team };
+    var st = { __v: HASH_V, d: App.date };
     try {
       if (replace) history.replaceState(st, '', hash);
       else history.pushState(st, '', hash);
     } catch (e) { location.hash = hash; }
   }
   App.shareLink = function () {
-    return location.origin + location.pathname + '#/shift?d=' + App.date +
-      '&team=' + 'ABCDE'.charAt(App.team);
+    return location.origin + location.pathname + '#/shift?d=' + App.date;
   };
 
   /* ---------------- 启动 ---------------- */
@@ -108,7 +106,6 @@
     readStorage();
 
     var r = parseHash();
-    if (r.team != null) App.team = r.team;
     if (r.d) App.date = r.d;
     if (r.y && r.m) App.month = { y: r.y, m: r.m };
     if (!App.month) App.month = { y: +App.date.slice(0, 4), m: +App.date.slice(5, 7) };
@@ -125,13 +122,12 @@
       if (v != null && v < HASH_V) {
         // 界面不动，但把地址栏补回当前状态，免得 URL 和界面不一致
         try {
-          history.replaceState({ __v: HASH_V, d: App.date, team: App.team }, '',
-            '#/shift?d=' + App.date + '&team=' + 'ABCDE'.charAt(App.team));
+          history.replaceState({ __v: HASH_V, d: App.date }, '',
+            '#/shift?d=' + App.date);
         } catch (e) {}
         return;
       }
       var x = parseHash();
-      if (x.team != null) App.team = x.team;
       if (x.d) App.date = x.d;
       if (x.y && x.m) App.month = { y: x.y, m: x.m };
       if (v != null) HASH_V = v;
@@ -144,49 +140,19 @@
   }
 
   function readStorage() {
-    var t = lsGet(KEY_TEAM);
-    if (t != null && /^\d$/.test(t)) App.team = S.idxOf(+t);
+    // 只存"我的班组"；没有"正在看哪个班组"这回事了
     var m = lsGet(KEY_MY);
     if (m != null && /^\d$/.test(m)) App.myTeam = S.idxOf(+m);
   }
 
   /* ---------------- 渲染 ---------------- */
-  /**
-   * 「现在这一刻在岗的是哪一段」——和看哪一天、选了哪个班都无关。
-   * 今天 06:00 打这个电话，现在在岗的就是夜班（哪怕那一格排的是休、
-   * 因为夜班 02:55 就上了，是按前一天的排班算的）。
-   */
-  function currentDuty(today) {
-    var ref = S.nowRef();
-    var segs = S.daySegments(today, ref);
-    for (var k = 0; k < segs.length; k++) {
-      if (segs[k].s <= ref && ref < segs[k].e) {
-        return {
-          index: segs[k].index, team: segs[k].team, short: segs[k].short,
-          shift: segs[k].shift, startAbs: segs[k].s, endAbs: segs[k].e,
-          range: S.mmRange(segs[k].start, segs[k].end), ref: ref
-        };
-      }
-    }
-    return null;
-  }
-
   function ctx() {
     var today = S.todayStr();
     var isToday = App.date === today;
-    // 只有「看的正是今天」时才按**现在的时间**算上下交班；
-    // 看别的日期就按那一天的排班算（否则会出现「9/23 的接班人是 9/22 的人」这种怪结果）
-    var ref = isToday ? S.nowRef() : null;
     return {
-      app: App, Shift: S, date: App.date, today: today, isToday: isToday, ref: ref,
-      teamIndex: App.team, team: S.team(App.team),
+      app: App, Shift: S, date: App.date, today: today, isToday: isToday,
       month: App.month, myTeam: App.myTeam,
-      // 「现在在岗的是谁」（只在看今天时给）
-      onDutyNow: isToday ? currentDuty(today) : null,
-      // 交班关系（接班 / 交班）一次算好，交给视图渲染
-      handover: S.handover(App.date, App.team, ref),
-      roster: S.dayRoster(App.date, App.team, ref),
-      go: App.go, setDate: App.setDate, setTeam: App.setTeam, setMonth: App.setMonth,
+      go: App.go, setDate: App.setDate, setMonth: App.setMonth,
       refresh: render
     };
   }
@@ -471,7 +437,7 @@
       if (btn) { btn.classList.remove('pressing'); btn = null; }
     }
     elView.addEventListener('pointerdown', function (e) {
-      var b = e.target.closest && e.target.closest('.teampick button[data-team]');
+      var b = e.target.closest && e.target.closest('.teampick .teamcell');
       if (!b) return;
       btn = b; x0 = e.clientX; y0 = e.clientY;
       b.classList.add('pressing');
@@ -479,7 +445,7 @@
         timer = null;
         firedAt = Date.now();
         if (navigator.vibrate) { try { navigator.vibrate(15); } catch (x) {} }
-        App.setMyTeam(+b.dataset.team);   // 会重新渲染，按下的 class 自然没了
+        App.setMyTeam(+b.dataset.meIndex);   // 会重新渲染，按下的 class 自然没了
         btn = null;
       }, 480);
     });
@@ -503,13 +469,12 @@
   function bindGlobals() {
     // 视图里所有 data-* 动作统一在这里分发（日期条和班组条都挪进视图了，所以都在这一条里）
     elView.addEventListener('click', function (e) {
-      var t = e.target.closest('[data-act],[data-team],[data-pick],[data-d]');
+      var t = e.target.closest('[data-act],[data-pick],[data-d]');
       if (!t) return;
       // 点日期（总貌格子 / 日历格子）→ 直接跳到那天
       if (t.dataset.pick) { App.jumpToDate(t.dataset.pick); return; }
       // 前后一天（按钮上只有 data-d）
       if (t.dataset.d != null && t.dataset.d !== '') { App.shiftDate(+t.dataset.d); return; }
-      if (t.dataset.team != null && t.dataset.team !== '') { App.setTeam(+t.dataset.team); return; }
       var act = t.dataset.act;
       if (!act || act === 'actions') return;
       if (act === 'today') { App.setDate(S.todayStr()); return; }
@@ -560,13 +525,6 @@
     render();
   };
   App.shiftDate = function (n) { App.setDate(S.addDays(App.date, n)); };
-  App.setTeam = function (i) {
-    App.team = S.idxOf(i);
-    lsSet(KEY_TEAM, App.team);
-    ALIGN_DAY = true;                  // 换班组 → 也重新对准
-    writeHash(true);
-    render();
-  };
   /**
    * 认下「我的班组」。界面上已经有反馈了（那个按钮会带 data-me 标记、我那一行会加粗），
    * 所以不再弹 toast —— 免得挡住内容。
