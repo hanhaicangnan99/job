@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>倒班日历 · 五班三倒</title>
+<meta name="description" content="五班三倒 10 日轮转倒班日历：5 个班组随意切换看班，也能一眼看整月总貌。离线可用。">
+<meta name="theme-color" content="#16324f">
+<meta name="color-scheme" content="light">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" href="./icons/icon-192.png" sizes="192x192">
+<link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
+
+<!-- 可安装 + 全屏 -->
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="倒班日历">
+<meta name="format-detection" content="telephone=no">
+
+<link rel="stylesheet" href="./assets/styles.css">
+</head>
+<body>
+
+<div id="banner" class="banner" hidden></div>
+
+<header class="appbar" id="appbar">
+  <div class="wrap">
+    <div class="row">
+      <h1 id="title">倒班日历</h1>
+      <button class="btn-install" hidden>安装到桌面</button>
+    </div>
+    <div class="sub" id="subtitle"></div>
+    <div class="datebar" id="datebar"></div>
+    <div class="teampick" id="teampick" aria-label="选班组"></div>
+  </div>
+</header>
+
+<main class="wrap" id="view"></main>
+
+<nav class="tabbar" id="tabbar" aria-label="主导航"></nav>
+
+<noscript>
+  <div class="wrap"><div class="note bad">这个 App 需要 JavaScript 才能运行。</div></div>
+</noscript>
+
+<!-- 顺序即依赖顺序：经典 script + 全局命名空间，单文件离线版也能在 file:// 下跑 -->
+<script src="./assets/shift.data.js"></script>
+<script src="./assets/ui.js"></script>
+<script src="./assets/view.shift.js"></script>
+<script src="./assets/app.js"></script>
+</body>
+</html>

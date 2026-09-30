@@ -1,0 +1,9 @@
+# 本地预览截图（每次跑 browser-check.mjs 重新生成，不进版本库）
+.shots/
+
+# 编辑器 / 系统
+.vscode/
+.idea/
+Thumbs.db
+Desktop.ini
+*.log
