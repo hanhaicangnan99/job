@@ -26,8 +26,11 @@
     return '<div class="datebar2">' +
       '<button class="navbtn" data-d="-1" aria-label="前一天">‹</button>' +
       '<div class="bigdate" data-act="pick-date" role="button" title="点一下打开日历">' +
+      // 「X 天后」固定换到第二行（不靠字数多少让浏览器自己折）
+      '<span class="bd-top">' +
       '<span class="bd-md">' + S.mdLabel(d) + '</span>' +
       '<span class="bd-wd">' + S.weekday(d) + '</span>' +
+      '</span>' +
       '<span class="bd-rel">' + (d === today ? '今天' : U.esc(rel)) + '</span>' +
       '</div>' +
       '<button class="navbtn" data-act="today" aria-label="回到今天" title="回到今天">今</button>' +
