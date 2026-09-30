@@ -496,31 +496,53 @@
     var k;
 
     if (LEN[sh]) {
-      // 全部在岗区段换成「紧贴当天的绝对分钟」；传了 ref 就是实时口径
-      var segs = daySegments(dateStr, ref);
+      /* 在**一条绝对分钟时间轴**上找上下家。
+         绝对不能只看「当天」的那些区间 —— 夜班 02:55 的接班人是**前一天晚上**开始的中班，
+         它属于前一天，所以在当天的区间表里根本找不到。 */
+      var segs = [];
+
+      function pushDay(ds, deltaDays) {
+        var base = deltaDays * 1440;
+        for (var c = 0; c < 5; c++) {
+          var sp2 = spanOf(ds, c);
+          if (!sp2) continue;
+          segs.push({
+            index: c, team: TEAMS[c], short: TEAM_SHORT[c], shift: shiftOf(ds, c),
+            s: sp2.start + base, e: sp2.end + base,
+            start: sp2.start, end: sp2.end, onDate: ds, day: deltaDays
+          });
+        }
+      }
+      pushDay(addDays(dateStr, -1), -1);
+      pushDay(dateStr, 0);
+      pushDay(addDays(dateStr, 1), 1);
+
+      // 我这一班（当天那段）
       var me = null;
       for (k = 0; k < segs.length; k++) {
-        if (segs[k].index === i) {
-          if (!segs[k].carry && !segs[k].nextDay) { me = segs[k]; break; }
-          if (!me) me = segs[k];
-        }
+        if (segs[k].index === i && segs[k].day === 0) { me = segs[k]; break; }
       }
       if (ref != null && isFinite(ref)) {
         for (k = 0; k < segs.length; k++) {
-          if (segs[k].s <= ref && ref < segs[k].e) { me = segs[k]; break; }
+          if (segs[k].index === i && segs[k].s <= ref && ref < segs[k].e) { me = segs[k]; break; }
         }
       }
-      if (!me) me = { index: i, s: BLOCKS[sh][0][0], e: BLOCKS[sh][0][1] };
-      out.range = mmRange(me.start != null ? me.start : me.s, me.end != null ? me.end : me.e);
+      if (!me) {
+        me = { index: i, team: TEAMS[i], short: TEAM_SHORT[i], shift: sh,
+          s: BLOCKS[sh][0][0], e: BLOCKS[sh][0][1],
+          start: BLOCKS[sh][0][0], end: BLOCKS[sh][0][1], day: 0 };
+      }
+      me.range = mmRange(me.start, me.end);
+      out.range = me.range;
 
       // 接班：结束时刻 == 我的开始时刻 的那个人
       for (k = 0; k < segs.length; k++) {
-        if (segs[k].index === i || segs[k].nextDay) continue;
+        if (segs[k] === me || segs[k].day > me.day) continue;
         if (segs[k].e === me.s) { out.arrives = segs[k]; break; }
       }
-      // 交班：开始时刻 == 我的结束时刻 的那个人（可能是次日凌晨才上班的夜班）
+      // 交班：开始时刻 == 我的结束时刻 的那个人（可能是次日凌晨才上的夜班）
       for (k = 0; k < segs.length; k++) {
-        if (segs[k].index === i || segs[k].carry) continue;
+        if (segs[k] === me || segs[k].day < me.day) continue;
         if (segs[k].s === me.e) { out.leaves = segs[k]; break; }
       }
     } else {

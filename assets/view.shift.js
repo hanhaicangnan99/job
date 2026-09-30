@@ -32,23 +32,78 @@
     }).join('') + '</div>';
   }
 
-  /** 交班一览的一行 */
-  function handoverRow(r, opts) {
-    opts = opts || {};
-    var cls = 'hrow' + (opts.mine ? ' mine' : '') + (opts.dim ? ' dim' : '') + (opts.now ? ' now' : '');
-    var nameHtml = U.esc(r.team);
-    var tag = opts.tag ? '<span class="htag">' + U.esc(opts.tag) + '</span>' : '';
-    var extra = '';
-    if (r.carry) extra = '<span class="hsub">昨夜的班，' + U.esc(S.hhmm(r.e)) + ' 下班</span>';
-    else if (r.nextDay) extra = '<span class="hsub">次日 ' + U.esc(S.hhmm(r.s)) + ' 上班</span>';
-    else if (r.onDate) extra = '<span class="hsub">' + U.esc(r.onDate.slice(5)) + '</span>';
+  /**
+   * 本日一览：**固定按 夜班 → 白班 → 中班** 排（这也是它们每天接力的先后）。
+   * 每个班次恰好一个班组在岗。
+   * 如果「我的班组」这天休息，就在最后再加一行自己的「休息」。
+   */
+  function shiftRows(ctx, i) {
+    var d = ctx.date;
+    var h = ctx.handover || S.handover(d, i, ctx.ref);
+    var now = ctx.onDutyNow;
+    var onNow = !!(now && now.index === i);
+    var order = ['夜', '白', '中'];
+    var rows = [];
 
+    for (var k = 0; k < order.length; k++) {
+      var sh = order[k];
+      var who = null, startedPrev = false, t;
+      for (t = 0; t < 5; t++) {
+        if (S.shiftOf(d, t) !== sh) continue;
+        if (!S.spanOf(d, t)) continue;
+        who = t; break;
+      }
+      if (who == null) {
+        // 当天的格子没排到它（但前一天那班跨零点，凌晨还在岗）
+        for (t = 0; t < 5; t++) {
+          var ps = S.spanOf(S.addDays(d, -1), t);
+          if (ps && ps.end > 1440 && S.shiftOf(S.addDays(d, -1), t) === sh) { who = t; startedPrev = true; break; }
+        }
+      }
+      if (who == null) continue;
+      var sp = S.spanOf(d, who) || S.spanOf(S.addDays(d, -1), who);
+      rows.push({
+        shift: sh, index: who, team: S.team(who).name,
+        range: startedPrev ? ('18:55-次日' + S.hhmm(sp.end)) : S.mmRange(sp.start, sp.end),
+        carry: startedPrev,
+        mine: who === i,
+        brief: startedPrev ? ('从 ' + S.addDays(d, -1).slice(5) + ' 晚上上到现在')
+          : (sp.end > 1440 ? '跨零点，次日 ' + S.hhmm(sp.end) + ' 下班' : ''),
+        atText: S.hhmm(sp.end)
+      });
+    }
+
+    // 自己的班不在上面（休息）→ 单独补一行
+    if (!rows.some(function (r) { return r.mine; })) {
+      rows.push({
+        shift: '休', index: i, team: S.team(i).name, range: '', mine: true, rest: true,
+        brief: '这一天不上班'
+      });
+    }
+
+    // 看今天 + 正好在上班 → 标出来
+    for (var r2 = 0; r2 < rows.length; r2++) {
+      if (onNow && rows[r2].index === i && !rows[r2].rest) { rows[r2].now = true; rows[r2].range = now.range; }
+    }
+    return rows;
+  }
+
+  /** 一览里的一行 */
+  function shiftRow(r, opts) {
+    opts = opts || {};
+    var cls = 'hrow s-' + S.SHIFT_CLASS[r.shift]
+      + (r.mine ? ' mine' : '')
+      + (r.rest ? ' restrow' : '')
+      + (r.now ? ' now' : '');
+    var tag = r.rest ? '休息' : (r.mine ? (r.now ? '我 · 在岗' : '我') : '');
+    var brief = r.brief ? '<span class="hsub">' + U.esc(r.brief) + '</span>' : '';
     return '<div class="' + cls + '">' +
-      '<div class="hname">' + nameHtml + tag + '</div>' +
+      '<div class="hname">' + U.esc(r.team) +
+      (tag ? '<span class="htag">' + U.esc(tag) + '</span>' : '') + '</div>' +
       '<div class="hmid">' +
       '<span class="chip ' + S.SHIFT_CLASS[r.shift] + '">' + U.esc(S.SHIFT_NAME[r.shift]) + '</span>' +
-      '<span class="htime">' + U.esc(r.range || S.SHIFT_HOURS[r.shift]) + '</span>' +
-      extra +
+      (r.range ? '<span class="htime">' + U.esc(r.range) + '</span>' : '') +
+      brief +
       '</div></div>';
   }
 
@@ -61,10 +116,10 @@
     var h = ctx.handover || S.handover(d, i, ctx.ref);
     var now = ctx.onDutyNow;
     var onNow = !!(now && now.index === i);      // 我看的这个班，现在正在岗
-    // 上班日：按那一班的时间给个状态（还没上班 / 已经下班 / 现在正上班）
+    // 上班日：按那一班的时间给个状态（还没上班 / 已经上完了）
     var dutyState = '';
     if (h.onDuty && !onNow && ctx.isToday) {
-      var nowMin = ctx.ref - S.dayNum(d) * 1440;   // 现在这一天的分钟
+      var nowMin = ctx.ref - S.dayNum(d) * 1440;
       var startMin = S.BLOCKS[h.shift][0][0], endMin = S.BLOCKS[h.shift][0][1];
       if (nowMin < startMin) dutyState = '还没上班';
       else if (nowMin >= endMin) dutyState = '这个班已经上完了';
@@ -97,52 +152,18 @@
     var headTitle = S.SHIFT_NAME[onNow ? now.shift : h.shift];
     if (onNow) headTitle += '　' + now.range + '　<span class="nowtag">正在上班</span>';
     else if (h.onDuty) headTitle += '　' + h.range + (dutyState ? '　<span class="pill">' + dutyState + '</span>' : '');
-    var rows = [];
+    else headTitle = t.name + '　休息';
 
-    if (onNow) {
-      // 正在上班：按现在这一刻算上下家（比按「这一天排的班」更准）
-      var segs = S.daySegments(d, now.ref);
-      var idx = -1, k;
-      for (k = 0; k < segs.length; k++) {
-        if (segs[k].index === i && segs[k].s <= now.ref && now.ref < segs[k].e) { idx = k; break; }
-      }
-      if (idx >= 0) {
-        var seg = segs[idx];
-        var up = null, down = null;
-        for (k = 0; k < segs.length; k++) {
-          if (segs[k] === seg) continue;
-          if (segs[k].e === seg.s && !up) up = segs[k];
-          if (segs[k].s === seg.e && !down) down = segs[k];
-        }
-        if (up) rows.push(handoverRow({ index: up.index, team: up.team, shift: up.shift,
-          range: S.mmRange(up.start, up.end), carry: true, e: up.end }, { tag: '接班' }));
-        rows.push(handoverRow({ index: i, team: t.name, shift: seg.shift,
-          range: S.mmRange(seg.start, seg.end) }, { mine: true, now: true, tag: '我 · 在岗' }));
-        if (down) rows.push(handoverRow({ index: down.index, team: down.team, shift: down.shift,
-          range: S.mmRange(down.start, down.end), nextDay: true, s: down.start }, { tag: '交给' }));
-      }
-    } else {
-      if (h.arrives) rows.push(handoverRow(h.arrives, { tag: '接班' }));
-      else if (h.onDuty) {
-        rows.push('<div class="hrow empty"><div class="hname">—</div><div class="hmid">' +
-          '<span class="hsub">这一班没人交给我（当天最早的一班）</span></div></div>');
-      }
-      rows.push(handoverRow({ index: i, team: t.name, shift: h.shift, range: h.range },
-        { mine: true, tag: '我' }));
-      if (h.leaves) rows.push(handoverRow(h.leaves, { tag: '交给' }));
-      else if (h.onDuty) {
-        rows.push('<div class="hrow empty"><div class="hname">—</div><div class="hmid">' +
-          '<span class="hsub">这一班没人接我的班</span></div></div>');
-      }
-    }
+    var rows = shiftRows(ctx, i).map(function (r) { return shiftRow(r); });
 
     out.push(U.card(headTitle, '<div class="hlist">' + rows.join('') + '</div>' +
-      U.note('上面那行是<b>把班交给我的人</b>，下面那行是<b>接我班的人</b>；中间加粗的就是我。' +
-        (h.basis === 'rest' && !onNow
-          ? '<br>这一天 <b>' + U.esc(t.name) + ' 休息</b>：上面是<b>上一个班（' +
-            U.esc(h.prevWork ? h.prevWork.date : '—') + '）交班给了谁</b>，下面是<b>下一个班（' +
-            U.esc(h.nextWork ? h.nextWork.date : '—') + '）从谁手里接班</b>。'
-          : ''), 'info'), { rawTitle: true }));
+      U.note('固定按 <b>夜班 → 白班 → 中班</b> 排（这也是它们每天接力的先后）。' +
+        '<b>加粗那一行就是我</b> —— ' +
+        (h.onDuty
+          ? '我这一班上面那个班（' + (h.arrives ? U.esc(h.arrives.team) + ' ' + U.esc(S.SHIFT_NAME[h.arrives.shift]) : '—') +
+            '）把班交给我，下面那个班（' + (h.leaves ? U.esc(h.leaves.team) + ' ' + U.esc(S.SHIFT_NAME[h.leaves.shift]) : '—') + '）接我的班。'
+          : '我这一天休息，上面三行就是当天在上班的三个班。'),
+        'info'), { rawTitle: true }));
 
     /* ---- 后面还有什么 ---- */
     var tips = [];
