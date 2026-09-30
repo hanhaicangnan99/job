@@ -506,7 +506,7 @@
       var t = e.target.closest('[data-act],[data-team],[data-pick],[data-d]');
       if (!t) return;
       // 点日期（总貌格子 / 日历格子）→ 直接跳到那天
-      if (t.dataset.pick) { App.setDate(t.dataset.pick); return; }
+      if (t.dataset.pick) { App.jumpToDate(t.dataset.pick); return; }
       // 前后一天（按钮上只有 data-d）
       if (t.dataset.d != null && t.dataset.d !== '') { App.shiftDate(+t.dataset.d); return; }
       if (t.dataset.team != null && t.dataset.team !== '') { App.setTeam(+t.dataset.team); return; }
@@ -577,17 +577,80 @@
     render();
   };
   /**
-   * 点总貌图的"上月/下月"。日期本身不变 → 时间轴不重新定位，
-   * 但月份要跟着走，否则总貌图和日期就对不上了。
+   * 点总貌图的"上月/下月"。
+   *
+   * 总貌图是**完全独立**的一块：翻它的月份只重画总貌图自己，
+   * 绝不走整体 render()。原因：
+   *   · 整体重渲染会碰时间轴的 scrollTop，从而触发 scroll 事件 ——
+   *     那个事件会把 App.date 改成"时间轴顶部那天"，
+   *     于是就出现"点总貌图的上月/下月，上面的日期也跟着变"。
+   *   · 顺带也省掉了重建 210 天时间轴的开销。
    */
   App.setMonth = function (y, m) {
     while (m < 1) { m += 12; y--; }
     while (m > 12) { m -= 12; y++; }
     App.month = { y: y, m: m };
-    ALIGN_DAY = false;
-    render();
+    var P = root.Shift.Views.shift.parts;
+    if (P) swapHtml('#ovHost', P.overview(ctx()));
   };
   App.refresh = function () { render(); };
+
+  /**
+   * 点总貌图上的日期格子：**不重建整页**，直接把时间轴滚到那一天。
+   * 时间轴把当前那天摆在定位点上，所以"往后 n 天"就是往下滚 n 天的高度。
+   * 这样既不用重建 210 天的时间轴，也不会碰到总貌图（它保持在自己翻到的月份）。
+   * 万一算不出位置（没布局），退回整页重渲染。
+   */
+  App.jumpToDate = function (d) {
+    if (!S.isValidDate(d)) return;
+    var list = document.getElementById('rowsList');
+    if (list && putDayAtTop(list, d)) {
+      App.date = d;
+      App.month = { y: +d.slice(0, 4), m: +d.slice(5, 7) };
+      writeHash(true);
+      renderHeadAndMonth();
+      return;
+    }
+    ALIGN_DAY = true;                   // 兜底：整页重渲染并对准这一天
+    App.setDate(d);
+  };
+
+  /**
+   * 把某一天的行放到时间轴可视区最上面（作为"当前那天"的显示位置），并校正到分毫不差。
+   *
+   * 为什么不能只按"两个日期标签的偏移差"来滚：那样会带上标签行的取整误差，
+   * 落点可能刚好落在上一天和这一天之间，于是判定成下一天（差一天的坑）。
+   * 这里直接滚到位、再**用 dayAtTop 回读校验**，不对就按差值修正（最多几轮）。
+   * 成功返回 true。要求这一天已经在时间轴里，且前后都留有一个周期的余量。
+   */
+  function putDayAtTop(list, d) {
+    var seps = list.querySelectorAll('.daysep');
+    if (seps.length < 40) return false;
+    var cycle = innerOffset(list, seps[10]) - innerOffset(list, seps[0]);
+    if (cycle <= 0) return false;
+    var target = null;
+    for (var i = 0; i < seps.length; i++) if (seps[i].dataset.day === d) { target = seps[i]; break; }
+    if (!target) return false;
+    var max = list.scrollHeight - list.clientHeight;
+    var y = innerOffset(list, target);
+    if (y < cycle || y > max - cycle) return false;   // 余量不够，交给整页重渲染
+    list.scrollTop = y;
+    for (var k = 0; k < 6; k++) {
+      var got = dayAtTop(list);
+      if (got === d) return true;
+      var gotSep = null;
+      for (var j = 0; j < seps.length; j++) if (seps[j].dataset.day === got) { gotSep = seps[j]; break; }
+      if (!gotSep) return false;
+      var dy = innerOffset(list, target) - innerOffset(list, gotSep);
+      if (!dy) return false;
+      var ny = list.scrollTop + dy;
+      if (ny < 0) ny = 0;
+      if (ny > max) ny = max;
+      if (ny === list.scrollTop) return false;
+      list.scrollTop = ny;
+    }
+    return dayAtTop(list) === d;
+  }
 
   /* ---------------- 弹层 ---------------- */
 
