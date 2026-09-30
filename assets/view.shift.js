@@ -36,39 +36,27 @@
   }
 
   /* ==================================================================
-   * 2) 班组选择器（牌子上的班次跟着所看日期变）
-   *    右边一个常驻的「我的」按钮：设过了就点它跳回我的班组，
-   *    没设过就点它去设置（不预设任何人是谁 —— 用户不一定是二值班）。
-   *    注意：原来贴在按钮右上角的「我的」小标已经去掉 ——
-   *    那一行是横向滚动容器（overflow-x:auto），负偏移的标会被裁掉一半。
+   * 2) 班组选择器：1值班～5值班，点一下就切。
+   *    右上角那个「我的」小标已经拿掉 —— 那一行是横向滚动容器，负偏移的标会被裁一半；
+   *    右边那个「我的」按钮也拿掉了，这一栏只留 1～5值班。
+   *    要看自己那个班被重点标出来的话，长按某个值班按钮认一下就行（可选，不按就没有"我"）。
    * ================================================================== */
   function teamPick(ctx) {
     var d = ctx.date;
-    var mine = ctx.myTeam;                    // null = 还没设过
-    var buttons = S.TEAMS.map(function (name, i) {
-      var sh = S.shiftOf(d, i);
-      var isMe = i === mine;
-      return '<button type="button" data-team="' + i + '"' +
-        (i === ctx.teamIndex ? ' class="on"' : '') +
-        ' aria-label="' + U.esc(name + (isMe ? '（我的班组）' : '') + '，长按设为我的班组') + '">' +
-        '<b>' + U.esc(name) + '</b>' +
-        '<span class="ic ' + S.SHIFT_CLASS[sh] + '">' + U.esc(S.SHIFT_BADGE[sh]) + '</span>' +
-        '</button>';
-    }).join('');
-
-    var chip;
-    if (mine == null) {
-      chip = '<button type="button" class="myjump empty" data-act="set-my-team"' +
-        ' aria-label="设置我的班组"><em>我的</em></button>';
-    } else {
-      chip = '<button type="button" class="myjump' + (ctx.teamIndex === mine ? ' on' : '') + '"' +
-        ' data-team="' + mine + '"' +
-        ' aria-label="回到我的班组 ' + U.esc(S.TEAMS[mine]) + '"><em>我的</em></button>';
-    }
-
-    return '<div class="teamrow">' +
-      '<div class="teampick">' + buttons + '</div>' + chip +
-      '</div>';
+    var mine = ctx.myTeam;                    // null = 没认过
+    return '<div class="teamrow"><div class="teampick">' +
+      S.TEAMS.map(function (name, i) {
+        var sh = S.shiftOf(d, i);
+        var isMe = i === mine;
+        return '<button type="button" data-team="' + i + '"' +
+          (i === ctx.teamIndex ? ' class="on"' : '') +
+          (isMe ? ' data-me="1"' : '') +
+          ' title="' + U.esc(name + (isMe ? '（我的班组）' : '') + ' · 长按认作我的班组') + '">' +
+          '<b>' + U.esc(name) + '</b>' +
+          '<span class="ic ' + S.SHIFT_CLASS[sh] + '">' + U.esc(S.SHIFT_BADGE[sh]) + '</span>' +
+          '</button>';
+      }).join('') +
+      '</div></div>';
   }
 
   /* ==================================================================
@@ -168,7 +156,7 @@
 
     var body = mx.rows.map(function (row) {
       var tr = '<tr' + (row.index === i ? ' class="mine"' : '') + '>' +
-        '<th class="stickyc">' + U.esc(row.short) + (ctx.myTeam === row.index ? '<i class="my">我的</i>' : '') + '</th>';
+        '<th class="stickyc">' + U.esc(row.short) + '</th>';
       for (var k = 0; k < row.cells.length; k++) {
         var c = row.cells[k];
         tr += '<td class="shiftcell ' + c.cls +

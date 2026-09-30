@@ -261,7 +261,6 @@
       if (!act || act === 'actions') return;
       if (act === 'today') { App.setDate(S.todayStr()); return; }
       if (act === 'pick-date') { openDatePicker(); return; }
-      if (act === 'set-my-team') { openMyTeamPicker(); return; }
       if (act === 'prev-month') { App.setMonth(App.month.y, App.month.m - 1); return; }
       if (act === 'next-month') { App.setMonth(App.month.y, App.month.m + 1); return; }
       if (act === 'install-hide' || act === 'install') { hideBanner(); return; }
@@ -312,10 +311,13 @@
     writeHash(true);
     render();
   };
+  /**
+   * 认下「我的班组」。界面上已经有反馈了（那个按钮会带 data-me 标记、我那一行会加粗），
+   * 所以不再弹 toast —— 免得挡住内容。
+   */
   App.setMyTeam = function (i) {
     App.myTeam = S.idxOf(i);
     lsSet(KEY_MY, App.myTeam);
-    U.toast('已把「' + S.TEAMS[App.myTeam] + '」设为我的班组');
     render();
   };
   App.setMonth = function (y, m) {
@@ -371,30 +373,6 @@
         { label: '回到今天', onClick: function () { App.setDate(S.todayStr()); } },
         { label: '关掉' }
       ]
-    });
-  }
-
-  /** 选「我的班组」：不预设任何人是谁，让用户自己点 */
-  function openMyTeamPicker() {
-    U.sheet({
-      title: '你是哪个班组？',
-      sub: '设好之后页面上会重点标出你的班（也可以长按班组按钮快速设置）',
-      body: '<div class="mygrid">' + S.TEAMS.map(function (name, i) {
-        var sh = S.shiftOf(App.date, i);
-        return '<button type="button" class="mybtn" data-my="' + i + '">' +
-          '<b>' + U.esc(name) + '</b>' +
-          '<span class="myic ' + S.SHIFT_CLASS[sh] + '">' + U.esc(S.SHIFT_NAME[sh]) + '</span>' +
-          '</button>';
-      }).join('') + '</div>',
-      onMount: function (rootEl, close) {
-        rootEl.addEventListener('click', function (e) {
-          var b = e.target.closest('[data-my]');
-          if (!b) return;
-          App.setMyTeam(+b.dataset.my);
-          close();
-        });
-      },
-      actions: [{ label: '关掉' }]
     });
   }
 
