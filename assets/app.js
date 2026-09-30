@@ -25,7 +25,7 @@
 
   var VIEWS = ['shift'];              // 只有一页（总貌画在同一页下面）
 
-  var elView, elAppbar, elSub, elBanner;
+  var elView, elAppbar, elBanner;
   /* ---------------- 小工具 ---------------- */
   function lsGet(k) {
     try { return localStorage.getItem(k); } catch (e) { return null; }
@@ -83,11 +83,9 @@
 
   /* ---------------- 启动 ---------------- */
   function boot() {
+    elAppbar = U.$('#appbar');
     elView = U.$('#view');
     elBanner = U.$('#banner');
-    // 顶栏整条已经删掉（标题/副标题都不要了），安装按钮挪到 banner 那一条里
-    elAppbar = null;
-    elSub = null;
 
     readStorage();
 
@@ -184,6 +182,10 @@
     elView.innerHTML = '';
     if (holder) elView.appendChild(holder);
     if (view.mount) view.mount(elView, c);
+
+    // 顶栏只有标题，没有副标题
+    var title = document.getElementById('title');
+    if (title) title.textContent = '倒班日历';
 
     if (y) window.scrollTo(0, Math.min(y, document.body.scrollHeight));
   }
