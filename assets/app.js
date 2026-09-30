@@ -23,13 +23,9 @@
   root.Shift.App = App;
   root.__APP__ = App;
 
-  var VIEWS = ['shift', 'overview'];
-  var TABS = [
-    { id: 'shift', icon: '🔄', label: '轮转' },
-    { id: 'overview', icon: '🗓', label: '总貌' }
-  ];
+  var VIEWS = ['shift'];              // 只有一页（总貌画在同一页下面）
 
-  var elView, elAppbar, elSub, elDatebar, elTabbar, elBanner, elTeam;
+  var elView, elAppbar, elSub, elBanner;
   /* ---------------- 小工具 ---------------- */
   function lsGet(k) {
     try { return localStorage.getItem(k); } catch (e) { return null; }
@@ -58,22 +54,14 @@
     return out;
   }
   function writeHash(replace) {
-    var q = [];
-    if (App.view === 'overview') {
-      q.push('y=' + App.month.y, 'm=' + App.month.m);
-    } else {
-      q.push('d=' + App.date);
-    }
-    q.push('team=' + 'ABCDE'.charAt(App.team));
-    var hash = '#/' + App.view + '?' + q.join('&');
+    var hash = '#/shift?d=' + App.date + '&team=' + 'ABCDE'.charAt(App.team);
     try {
       if (replace) history.replaceState(null, '', hash);
       else history.pushState(null, '', hash);
     } catch (e) { location.hash = hash; }
   }
   App.shareLink = function () {
-    return location.origin + location.pathname + '#/' + App.view + '?' +
-      (App.view === 'overview' ? 'y=' + App.month.y + '&m=' + App.month.m : 'd=' + App.date) +
+    return location.origin + location.pathname + '#/shift?d=' + App.date +
       '&team=' + 'ABCDE'.charAt(App.team);
   };
 
@@ -82,28 +70,21 @@
     elAppbar = U.$('#appbar');
     elSub = U.$('#subtitle');
     elView = U.$('#view');
-    elTabbar = U.$('#tabbar');
     elBanner = U.$('#banner');
-    // 日期条和班组条都已经挪进视图里（自己渲染），顶栏不再需要它们
-    elDatebar = null;
-    elTeam = null;
 
     readStorage();
 
     var r = parseHash();
-    if (r.view) App.view = r.view;
     if (r.team != null) App.team = r.team;
     if (r.d) App.date = r.d;
     if (r.y && r.m) App.month = { y: r.y, m: r.m };
     if (!App.month) App.month = { y: +App.date.slice(0, 4), m: +App.date.slice(5, 7) };
 
-    renderTabs();
     bindGlobals();
     render();
 
     window.addEventListener('popstate', function () {
       var x = parseHash();
-      if (x.view) App.view = x.view;
       if (x.team != null) App.team = x.team;
       if (x.d) App.date = x.d;
       if (x.y && x.m) App.month = { y: x.y, m: x.m };
@@ -165,7 +146,7 @@
 
   function render() {
     var y = window.scrollY;
-    var view = root.Shift.Views[App.view] || root.Shift.Views.shift;
+    var view = root.Shift.Views.shift;
     var c = ctx();
 
     // 先拼成片段再挂进去：这样即使某次渲染返回空串，也不会把旧内容清成一片空白
@@ -175,27 +156,13 @@
     if (view.mount) view.mount(elView, c);
 
     renderAppbar();
-    renderTabs();
     if (y) window.scrollTo(0, Math.min(y, document.body.scrollHeight));
   }
 
   function renderAppbar() {
     var title = document.getElementById('title');
     if (title) title.textContent = '倒班日历';
-    if (elSub) {
-      elSub.textContent = App.view === 'overview'
-        ? '五班三倒 · 10 日一轮 · ' + U.monthLabel(App.month.y, App.month.m) + ' 总貌'
-        : '五班三倒 · 10 日一轮';
-    }
-    // 日期条已经挪进视图里（上面那条大的），顶栏这条不再用
-    if (elDatebar) { elDatebar.innerHTML = ''; elDatebar.hidden = true; }
-  }
-
-  function renderTabs() {
-    elTabbar.innerHTML = TABS.map(function (t) {
-      return '<button data-tab="' + t.id + '" class="' + (App.view === t.id ? 'on' : '') + '">' +
-        '<span class="ic">' + t.icon + '</span>' + t.label + '</button>';
-    }).join('');
+    if (elSub) elSub.textContent = '五班三倒 · 10 日一轮';
   }
 
   function renderBanner() {
@@ -211,56 +178,42 @@
 
   /* ---------------- 事件 ---------------- */
   function bindGlobals() {
-    elTabbar.addEventListener('click', function (e) {
-      var b = e.target.closest('[data-tab]');
-      if (b) App.go(b.dataset.tab);
-    });
-
     // 视图里所有 data-* 动作统一在这里分发（日期条和班组条都挪进视图了，所以都在这一条里）
     elView.addEventListener('click', function (e) {
-      var t = e.target.closest('[data-act],[data-team],[data-cell],[data-d]');
+      var t = e.target.closest('[data-act],[data-team],[data-pick],[data-d]');
       if (!t) return;
-      // 前后一天优先（按钮上只有 data-d）
+      // 点日期（总貌格子 / 日历格子）→ 直接跳到那天
+      if (t.dataset.pick) { App.setDate(t.dataset.pick); return; }
+      // 前后一天（按钮上只有 data-d）
       if (t.dataset.d != null && t.dataset.d !== '') { App.shiftDate(+t.dataset.d); return; }
-      // data-cell（总貌格子）优先：它同时带 data-team，不能被下面那条截走
-      if (t.dataset.cell) { openCell(t.dataset.cell, t.dataset.team); return; }
       if (t.dataset.team != null && t.dataset.team !== '') { App.setTeam(+t.dataset.team); return; }
       var act = t.dataset.act;
       if (!act || act === 'actions') return;
-      if (act === 'today') { App.setDate(S.todayStr()); if (App.month) App.setMonth(+S.todayStr().slice(0, 4), +S.todayStr().slice(5, 7)); return; }
+      if (act === 'today') { App.setDate(S.todayStr()); return; }
       if (act === 'pick-date') { openDatePicker(); return; }
-      if (act === 'prev-day') { App.shiftDate(-1); return; }
-      if (act === 'next-day') { App.shiftDate(1); return; }
       if (act === 'prev-month') { App.setMonth(App.month.y, App.month.m - 1); return; }
       if (act === 'next-month') { App.setMonth(App.month.y, App.month.m + 1); return; }
-      if (act === 'this-month') { var td = S.todayStr(); App.setMonth(+td.slice(0, 4), +td.slice(5, 7)); return; }
-      if (act === 'my-team') { App.setMyTeam(App.team); return; }
-      if (act === 'share') { doShare(); return; }
-      if (act === 'csv') { doCsv(); return; }
-      if (act === 'rules') { openRules(); return; }
     });
 
     document.addEventListener('keydown', function (e) {
       if (e.key === 'Escape') U.closeTop();
-      if (App.view !== 'shift') return;
       var tag = (e.target && e.target.tagName) || '';
       if (/INPUT|TEXTAREA|SELECT/.test(tag)) return;
       if (e.key === 'ArrowLeft') App.shiftDate(-1);
       if (e.key === 'ArrowRight') App.shiftDate(1);
     });
 
-    // 左右滑动切日期（避开弹层与横向表格）
+    // 左右滑动切日期（避开弹层、横向表格、班组条）
     var sx = 0, sy = 0, sw = false;
     document.addEventListener('touchstart', function (e) {
       if (U.$('.mask')) { sw = false; return; }
-      if (e.target.closest('.tbl-wrap, input, textarea, select, .sheet, .teampick')) { sw = false; return; }
+      if (e.target.closest('.tbl-wrap, .mxwrap, input, textarea, select, .sheet, .teampick')) { sw = false; return; }
       var t = e.touches[0];
       sx = t.clientX; sy = t.clientY; sw = true;
     }, { passive: true });
     document.addEventListener('touchend', function (e) {
       if (!sw) return;
       sw = false;
-      if (App.view !== 'shift') return;
       var t = e.changedTouches[0];
       var dx = t.clientX - sx, dy = t.clientY - sy;
       if (Math.abs(dx) < 70 || Math.abs(dy) > 52) return;
@@ -269,12 +222,7 @@
   }
 
   App.go = function (id, replace) {
-    if (VIEWS.indexOf(id) < 0) id = 'shift';
-    App.view = id;
-    if (id === 'overview') {
-      var td = App.date || S.todayStr();
-      if (!App.month) App.month = { y: +td.slice(0, 4), m: +td.slice(5, 7) };
-    }
+    App.view = 'shift';
     writeHash(replace !== false);
     render();
   };
@@ -282,7 +230,6 @@
     if (!S.isValidDate(d)) return;
     App.date = d;
     App.month = { y: +d.slice(0, 4), m: +d.slice(5, 7) };
-    if (App.view === 'overview') { writeHash(true); render(); return; }
     writeHash(true);
     render();
   };
@@ -303,117 +250,88 @@
     while (m < 1) { m += 12; y--; }
     while (m > 12) { m -= 12; y++; }
     App.month = { y: y, m: m };
-    if (App.view === 'overview') writeHash(true);
     render();
   };
   App.refresh = function () { render(); };
 
   /* ---------------- 弹层 ---------------- */
-  function openDatePicker() {
-    U.sheet({
-      title: '跳到哪一天',
-      sub: '按「我的班组」算；改动只影响你正在看的日期',
-      body: '<input type="date" id="__d" value="' + App.date + '">' +
-        '<div class="btn-row mt10">' +
-        '<button class="btn sm" data-q="0">今天</button>' +
-        '<button class="btn sm" data-q="1">明天</button>' +
-        '<button class="btn sm" data-q="7">7 天后</button>' +
-        '<button class="btn sm" data-q="30">30 天后</button>' +
-        '</div>',
-      onMount: function (rootEl, close) {
-        rootEl.addEventListener('click', function (e) {
-          var b = e.target.closest('[data-q]');
-          if (!b) return;
-          App.setDate(S.addDays(S.todayStr(), +b.dataset.q));
-          close();
-        });
-        var inp = U.$('#__d', rootEl);
-        inp.addEventListener('change', function () {
-          if (S.isValidDate(inp.value)) { App.setDate(inp.value); close(); }
-        });
-      },
-      actions: [{ label: '关掉' }]
-    });
-  }
 
-  function openCell(dateStr, teamIdx) {
-    var i = S.idxOf(teamIdx);
-    var t = S.team(i);
-    var b = S.blocksOn(dateStr, i);
-    var d = S.dayIndexOf(dateStr, i);
-    var rows = [
-      ['班组', t.name + (App.myTeam === i ? '（我的）' : '')],
-      ['日期', dateStr + '　' + S.weekday(dateStr)],
-      ['轮转', '第 ' + d + ' 天（10 天一轮）'],
-      ['当天班次', U.chip(b.myShift) + '　' + U.esc(S.SHIFT_HOURS[b.myShift])],
-      ['昨天留下的', b.yesterday ? U.esc(b.yesterday.label) : '—'],
-      ['当天上班', b.today ? U.esc(b.today.label) + '（' + U.dur(S.workMinutesOn(dateStr, i)) + '在岗）' : '不上班'],
-      ['明天', b.tomorrow ? U.esc(b.tomorrow.label) : '—']
-    ];
-    var nw = S.nextWork(dateStr, i);
-    if (b.myShift === '休' && nw) {
-      rows.push(['下次上班', nw.date + '（' + S.weekday(nw.date) + '）' + nw.shift + '班 ' + nw.hours +
-        (nw.daysUntil === 0 ? '' : '，' + nw.daysUntil + ' 天后')]);
-    }
+  /** 一张大的月历：点日期就跳过去 */
+  function openDatePicker() {
+    var cal = App.cal || { y: +App.date.slice(0, 4), m: +App.date.slice(5, 7) };
+    App.cal = cal;
+
     U.sheet({
-      title: t.name + ' · ' + S.mdLabel(dateStr),
-      sub: S.SHIFT_NAME[b.myShift] + '　' + S.SHIFT_HOURS[b.myShift],
-      body: U.kvRows(rows),
+      title: '选日期',
+      sub: '点一下日期就跳过去',
+      body: '<div id="calhost"></div>',
+      onMount: function (rootEl, close) {
+        var host = U.$('#calhost', rootEl);
+        function draw() {
+          host.innerHTML = monthGrid(cal.y, cal.m);
+        }
+        host.addEventListener('click', function (e) {
+          var nav = e.target.closest('[data-cal]');
+          if (nav) {
+            cal.m += +nav.dataset.cal;
+            if (cal.m < 1) { cal.m = 12; cal.y--; }
+            if (cal.m > 12) { cal.m = 1; cal.y++; }
+            draw();
+            return;
+          }
+          var cell = e.target.closest('[data-pick]');
+          if (cell && cell.dataset.pick) {
+            App.setDate(cell.dataset.pick);
+            close();
+          }
+        });
+        host.addEventListener('input', function (e) {
+          if (e.target.id !== '__ym') return;
+          var v = String(e.target.value || '').split('-');
+          if (v.length === 2 && +v[1] >= 1 && +v[1] <= 12) {
+            cal.y = +v[0]; cal.m = +v[1];
+            draw();
+          }
+        });
+        draw();
+      },
       actions: [
-        { label: '看这一天', cls: 'primary', onClick: function () { App.setTeam(i); App.setDate(dateStr); } },
+        { label: '回到今天', onClick: function () { App.setDate(S.todayStr()); } },
         { label: '关掉' }
       ]
     });
   }
 
-  function openRules() {
-    U.sheet({
-      title: '轮转规则',
-      sub: '这个日历就是按下面这几条算出来的',
-      body: U.kvRows([
-        ['班次数', '5 个班组 × 3 个班次，每天 3 个班在岗'],
-        ['一轮', '10 天（每 2 天换一个班）'],
-        ['序列', S.CYCLE.join(' ') + '<div class="small muted">第 1 天起，10 天循环；共 6 天上班、4 天休息</div>'],
-        ['锚点', '一值班的第 1 个白班 = <b>' + S.ANCHOR_TEAM1 + '</b><div class="small muted">第 t 个班比它晚 2×(t−1) 天，所以二值班是 ' + S.addDays(S.ANCHOR_TEAM1, 2) + '</div>'],
-        ['白班', S.SHIFT_HOURS['白'] + '（' + U.dur(S.LEN['白']) + '）'],
-        ['中班', S.SHIFT_HOURS['中'] + '（' + U.dur(S.LEN['中']) + '，跨零点）'],
-        ['夜班', S.SHIFT_HOURS['夜'] + '（' + U.dur(S.LEN['夜']) + '）'],
-        ['交接', '三班首尾相接，合计正好 <b>24 小时</b>：<br>' +
-          S.SHIFT_HOURS['夜'] + ' → ' + S.SHIFT_HOURS['白'] + ' → ' + S.SHIFT_HOURS['中'] + ' → 次日 ' + S.SHIFT_HOURS['夜'].split('-')[0]],
-        ['归格口径', '班次记在<b>开始那天</b>；中班跨零点，所以第二天的格子里会标一句「中班 02:55 下班」；夜班整段都在当天（02:55-10:25）']
-      ]) + U.note('本日历按固定轮转规则计算，<b>顶班 / 换班 / 请假不会反映</b>。' +
-        '夜里 10:25 那个点上是「夜班下班」和「白班上班」撞在一起，属于正常交接。', 'info'),
-      actions: [{ label: '知道了' }]
-    });
-  }
-
-  function doShare() {
-    var link = App.shareLink();
-    U.copy(link).then(function (ok) {
-      U.toast(ok ? '链接已复制：' + link : '复制失败，长按这里选中：' + link, ok ? 2600 : 6000);
-    });
-  }
-
-  function doCsv() {
-    var y = App.month.y, m = App.month.m;
+  /** 月历 HTML：周一起头，今天圈出来，当前选中的反白 */
+  function monthGrid(y, m) {
+    var first = S.firstWeekdayMon(y, m);
     var days = S.daysInMonth(y, m);
-    var head = ['日期', '星期'];
-    for (var i = 0; i < 5; i++) head.push(S.TEAMS[i]);
-    var rows = [head];
-    for (var d = 1; d <= days; d++) {
-      var ds = y + '-' + S.pad2(m) + '-' + S.pad2(d);
-      var row = [ds, S.weekday(ds)];
-      for (var t = 0; t < 5; t++) {
-        var sh = S.shiftOf(ds, t);
-        row.push(sh + (S.LEN[sh] ? ' ' + S.SHIFT_HOURS[sh] : ''));
-      }
-      rows.push(row);
+    var today = S.todayStr();
+    var cells = [];
+    var i;
+    for (i = 0; i < first; i++) cells.push('<div class="cal-d out"></div>');
+    for (i = 1; i <= days; i++) {
+      var ds = y + '-' + S.pad2(m) + '-' + S.pad2(i);
+      var isToday = ds === today, isSel = ds === App.date;
+      cells.push('<div class="cal-d' + (isToday ? ' today' : '') + (isSel ? ' sel' : '') +
+        '" data-pick="' + ds + '">' +
+        '<span class="n">' + i + '</span>' +
+        '<span class="w">' + (S.weekday(ds) || '').slice(1) + '</span>' +
+        '</div>');
     }
-    var csv = '\ufeff' + rows.map(function (r) {
-      return r.map(function (c) { return '"' + String(c).replace(/"/g, '""') + '"'; }).join(',');
-    }).join('\r\n');
-    U.download('倒班日历-' + y + '-' + S.pad2(m) + '.csv', csv, 'text/csv');
-    U.toast('已导出本月排班 CSV');
+    var heads = ['一', '二', '三', '四', '五', '六', '日'].map(function (x) {
+      return '<div class="cal-wd">' + x + '</div>';
+    }).join('');
+
+    return '<div class="row between mb10">' +
+      '<button class="btn sm" data-cal="-1">‹ 上月</button>' +
+      '<b>' + y + ' 年 ' + m + ' 月</b>' +
+      '<button class="btn sm" data-cal="1">下月 ›</button>' +
+      '</div>' +
+      '<div class="row mb10"><input type="month" id="__ym" value="' + y + '-' + S.pad2(m) +
+      '" style="min-height:38px"></div>' +
+      '<div class="cal">' + heads + cells.join('') + '</div>' +
+      '<div class="legend mt6"><span>今天有蓝圈</span><span>你正在看的那天是深蓝底</span></div>';
   }
 
   /* ---------------- Service Worker / 安装 ---------------- */

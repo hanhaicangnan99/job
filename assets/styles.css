@@ -330,6 +330,28 @@ table.mx td.shiftcell .c1 {
   border-radius: 50%; background: currentColor; opacity: .8;
 }
 
+/* ===================== 月历（选日期弹层） ===================== */
+.cal { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.cal .cal-wd { text-align: center; font-size: 11px; color: var(--muted); padding: 2px 0 4px; }
+.cal .cal-d {
+  aspect-ratio: 1 / 1; border-radius: 9px; border: 1px solid var(--line);
+  background: #fff; display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 0; cursor: pointer; overflow: hidden;
+}
+.cal .cal-d .n { font-size: 17px; font-weight: 600; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.cal .cal-d .w { font-size: 9.5px; color: var(--muted); line-height: 1.2; }
+.cal .cal-d.out { border: 0; background: transparent; cursor: default; }
+.cal .cal-d.today { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+.cal .cal-d.today .n { color: var(--accent); }
+.cal .cal-d.sel { background: var(--navy); border-color: var(--navy); }
+.cal .cal-d.sel .n { color: #fff; }
+.cal .cal-d.sel .w { color: rgba(255,255,255,.75); }
+.cal .cal-d:active { transform: scale(.96); }
+
+/* 总貌里「我正在看的那一天」那一列 */
+table.mx thead th.issel { background: #dce8f9; color: var(--navy); }
+table.mx td.shiftcell.issel { outline: 2px solid var(--navy); outline-offset: -2px; }
+
 /* ===================== 弹层 ===================== */
 .mask {
   position: fixed; inset: 0; background: rgba(16,24,36,.45);

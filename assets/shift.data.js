@@ -441,6 +441,12 @@
     return rows;
   }
 
+  /** 某月第一天是周几（0 = 周一 … 6 = 周日），用于月历排版 */
+  function firstWeekdayMon(y, m) {
+    // 用 UTC 避免夏令时
+    return (new Date(Date.UTC(y, m - 1, 1)).getUTCDay() + 6) % 7;
+  }
+
   /** 分钟区间 → '10:25-18:55' / '18:55-次日02:55' */
   function mmRange(a, b) {
     return hhmm(a) + '-' + (b > 1440 ? '次日' + hhmm(b) : hhmm(b));
@@ -657,6 +663,7 @@
     pad2: pad2, dayNum: dayNum, fromDayNum: fromDayNum, todayStr: todayStr,
     addDays: addDays, daysBetween: daysBetween, isValidDate: isValidDate,
     weekday: weekday, mdLabel: mdLabel, daysInMonth: daysInMonth, hhmm: hhmm, h1: h1,
+    firstWeekdayMon: firstWeekdayMon,
 
     cycleIndex: cycleIndex, teamIndexOf: teamIndexOf, teamOf: teamOf, team: team,
     idxOf: idxOf, normTeam: normTeam,
