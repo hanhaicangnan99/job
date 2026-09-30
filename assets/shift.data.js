@@ -341,6 +341,211 @@
     return null;
   }
 
+  /** 某天某班在岗时占的时间段（相对那天 00:00 的分钟；休息日返回 null） */
+  function spanOf(dateStr, t) {
+    var sh = shiftOf(dateStr, t);
+    if (!LEN[sh]) return null;
+    return { start: BLOCKS[sh][0][0], end: BLOCKS[sh][0][1] };
+  }
+
+  /**
+   * 指定日期、指定班组眼中的「本日一览」——按时间轴排好序的一列。
+   * 一行 = 一个班组的一段连续在岗时间，字段：
+   *   { index, team, short, shift, start, end, carry, mine, range }
+   *     start/end 相对当天 00:00 的分钟；end > 1440 表示跨到次日凌晨
+   *     carry = true 表示这是前一天那个班留下来的尾巴（当天凌晨还在岗）
+   *
+   * 例：二值班 2026-09-30 的视角 →
+   *   白班(我) 625-1135 ／ 中班 1135-1615
+   *   再加「三值班 夜班 175-625」这一行 —— 它就是当天凌晨接给我的人
+   */
+  /**
+   * 某一天的区间集合，相对该天 00:00 的分钟：
+   *   负值 = 前一天那个班留下来的尾巴；>1440 = 跨到次日凌晨的
+   * 传了 ref（**绝对分钟**，= dayNum(某天)*1440 + 当天分钟）就按那一刻倒推：
+   *   现在在岗的那一段标 nowSeg；在它之前的标 carry（已经过去的）；之后的标 nextDay。
+   * 不传 ref 时：行为与「只看日期」的口径一致。
+   */
+  function daySegments(dateStr, ref) {
+    var segs = [];
+    var c, sp;
+    for (c = 0; c < 5; c++) {
+      sp = spanOf(dateStr, c);
+      if (!sp) continue;
+      segs.push({ index: c, team: TEAMS[c], short: TEAM_SHORT[c], shift: shiftOf(dateStr, c),
+        s: sp.start, e: sp.end, carry: false, nextDay: false });
+    }
+    var py = addDays(dateStr, -1);
+    for (c = 0; c < 5; c++) {
+      if (spanOf(dateStr, c)) continue;              // 当天自己有班的上面已经列过
+      var psp = spanOf(py, c);
+      if (psp && psp.end > 1440) {
+        segs.push({ index: c, team: TEAMS[c], short: TEAM_SHORT[c], shift: shiftOf(py, c),
+          s: psp.end - 1440 - (psp.end - psp.start), e: psp.end - 1440, carry: true, nextDay: false });
+      }
+    }
+    var nx = addDays(dateStr, 1);
+    for (c = 0; c < 5; c++) {
+      var nsp = spanOf(nx, c);
+      if (!nsp) continue;
+      segs.push({ index: c, team: TEAMS[c], short: TEAM_SHORT[c], shift: shiftOf(nx, c),
+        s: nsp.start + 1440, e: nsp.end + 1440, carry: false, nextDay: true });
+    }
+
+    // 相对显示：以「这一行所属的那个日历日」为原点折算分钟
+    //   白班/夜班 → 0..1440；中班 → 起于 18:55，结束 1615（渲染成「次日 02:55」）
+    //   前一天留下的尾巴 → 负值（渲染成「-02:55」，表示当天凌晨那一段）
+    for (var kk = 0; kk < segs.length; kk++) {
+      var b = Math.floor(segs[kk].s / 1440) * 1440;
+      segs[kk].start = segs[kk].s - b;
+      segs[kk].end = segs[kk].e - b;
+    }
+
+    if (ref != null && isFinite(ref)) {
+      // 实时口径：ref 落在哪一段里，那一段就是「现在」；它前面的是过去、后面的是将来
+      var now = null;
+      for (var j = 0; j < segs.length; j++) {
+        if (segs[j].s <= ref && ref < segs[j].e) { now = segs[j]; break; }
+      }
+      if (now) {
+        for (var m2 = 0; m2 < segs.length; m2++) {
+          segs[m2].carry = segs[m2].e <= now.s;
+          segs[m2].nowSeg = segs[m2] === now;
+          segs[m2].nextDay = segs[m2].s >= now.e;
+        }
+      }
+    }
+    segs.sort(function (a, b2) { return a.s - b2.s; });
+    return segs;
+  }
+
+  /**
+   * 指定日期（可选：指定时刻）下的「本日在岗一览」，按时间先后排好。
+   * 一行 = 一个班组的一段连续在岗时间。
+   * 传了 ref（绝对分钟）就按那一刻倒推，用于「现在的交班关系」。
+   */
+  function dayRoster(dateStr, t, ref) {
+    var i = idxOf(t);
+    var segs = daySegments(dateStr, ref);
+    var rows = [];
+    for (var k = 0; k < segs.length; k++) {
+      var g = segs[k];
+      var row = {
+        index: g.index, team: g.team, short: g.short, shift: g.shift,
+        start: g.start, end: g.end, s: g.s, e: g.e,
+        carry: !!g.carry, nextDay: !!g.nextDay, nowSeg: !!g.nowSeg, mine: g.index === i
+      };
+      row.range = mmRange(row.start, row.end);
+      rows.push(row);
+    }
+    return rows;
+  }
+
+  /** 分钟区间 → '10:25-18:55' / '18:55-次日02:55' */
+  function mmRange(a, b) {
+    return hhmm(a) + '-' + (b > 1440 ? '次日' + hhmm(b) : hhmm(b));
+  }
+
+  /** 现在的绝对分钟（= dayNum(今天)*1440 + 当天分钟），用于实时交班口径 */
+  function nowRef() {
+    var d = new Date();
+    return dayNum(todayStr()) * 1440 + d.getHours() * 60 + d.getMinutes();
+  }
+
+  /** 某个日期在「现在」这一刻已经过去了 / 还没到 */
+  function isPastDay(dateStr, ref) {
+    var r = (ref == null) ? nowRef() : ref;
+    return (dayNum(dateStr) + 1) * 1440 <= r;
+  }
+  function isFutureDay(dateStr, ref) {
+    var r = (ref == null) ? nowRef() : ref;
+    return dayNum(dateStr) * 1440 > r;
+  }
+
+  /**
+   * 交班关系 —— 界面顺序：接班的在上、自己的在中间、交班给谁在下。
+   *
+   * 口径（按**时间轴**，不是按轮转序号，所以夜班/白班互相接这种跨格子的情况也对）：
+   *   接班 arrives = 我上班那一刻把他手上的班交给我的人
+   *   交班 leaves  = 我下班那一刻从我手上接过去的人
+   *
+   * 例：二值班 2026-09-26 白班（10:25-18:55）
+   *     接班 = 一值班 夜班（02:55-10:25，10:25 交给我）
+   *     交班 = 四值班 中班（18:55-次日 02:55，18:55 从我手上接过去）
+   *
+   * 例：二值班 2026-09-28 夜班（02:55-10:25）
+   *     接班 = 四值班 中班（9/27 晚上上的，当天 02:55 下班交给我）
+   *     交班 = 三值班 白班（10:25 从我手上接过去）
+   *
+   * 休息日：上面显示「我上一个班交班给了谁」，下面显示「我下一个班从谁手里接班」。
+   *
+   * @param {string} dateStr 日期
+   * @param {number} t 班组
+   * @param {number} [ref] 可选：参考时刻（绝对分钟 = dayNum(某天)*1440 + 当天分钟）。
+   *        传了它就是**实时口径** —— 「我现在在哪个班上」决定上面一行（接班）和下面一行（交班），
+   *        和「这一天排的是哪个班」无关。不传就按日期口径（早上/晚上分别看）。
+   */
+  function handover(dateStr, t, ref) {
+    var i = idxOf(t);
+    var sh = shiftOf(dateStr, i);
+    var out = {
+      index: i, team: TEAMS[i], short: TEAM_SHORT[i], shift: sh, range: SHIFT_HOURS[sh],
+      onDuty: !!LEN[sh], arrives: null, leaves: null,
+      basis: LEN[sh] ? 'shift' : 'rest', nextWork: null, prevWork: null
+    };
+    var k;
+
+    if (LEN[sh]) {
+      // 全部在岗区段换成「紧贴当天的绝对分钟」；传了 ref 就是实时口径
+      var segs = daySegments(dateStr, ref);
+      var me = null;
+      for (k = 0; k < segs.length; k++) {
+        if (segs[k].index === i) {
+          if (!segs[k].carry && !segs[k].nextDay) { me = segs[k]; break; }
+          if (!me) me = segs[k];
+        }
+      }
+      if (ref != null && isFinite(ref)) {
+        for (k = 0; k < segs.length; k++) {
+          if (segs[k].s <= ref && ref < segs[k].e) { me = segs[k]; break; }
+        }
+      }
+      if (!me) me = { index: i, s: BLOCKS[sh][0][0], e: BLOCKS[sh][0][1] };
+      out.range = mmRange(me.start != null ? me.start : me.s, me.end != null ? me.end : me.e);
+
+      // 接班：结束时刻 == 我的开始时刻 的那个人
+      for (k = 0; k < segs.length; k++) {
+        if (segs[k].index === i || segs[k].nextDay) continue;
+        if (segs[k].e === me.s) { out.arrives = segs[k]; break; }
+      }
+      // 交班：开始时刻 == 我的结束时刻 的那个人（可能是次日凌晨才上班的夜班）
+      for (k = 0; k < segs.length; k++) {
+        if (segs[k].index === i || segs[k].carry) continue;
+        if (segs[k].s === me.e) { out.leaves = segs[k]; break; }
+      }
+    } else {
+      // 休息日：上一个班的交班对象 + 下一个班的接班对象
+      for (var b = 1; b <= 11; b++) {
+        var pd = addDays(dateStr, -b);
+        if (LEN[shiftOf(pd, i)]) {
+          out.prevWork = { date: pd };
+          var ph = handover(pd, i, ref);
+          out.arrives = ph.leaves;
+          if (out.arrives) out.arrives.onDate = pd;
+          break;
+        }
+      }
+      var nxw = nextWork(dateStr, i);
+      out.nextWork = nxw;
+      if (nxw && nxw.daysUntil > 0) {
+        var nh = handover(nxw.date, i, ref);
+        out.leaves = nh.arrives;
+        if (out.leaves) out.leaves.onDate = nxw.date;
+      }
+    }
+    return out;
+  }
+
   /* ==================================================================
    * 五、月份总貌 / 统计
    * ================================================================== */
@@ -436,6 +641,9 @@
     dayIndexOf: dayIndexOf, shiftOf: shiftOf, shiftAtDayIndex: shiftAtDayIndex,
     blocksOn: blocksOn, workMinutesOn: workMinutesOn, hoursOf: hoursOf,
     nextWork: nextWork, nextRest: nextRest,
+    spanOf: spanOf, dayRoster: dayRoster, mmRange: mmRange,
+    daySegments: daySegments, handover: handover, nowRef: nowRef,
+    isPastDay: isPastDay, isFutureDay: isFutureDay,
     monthMatrix: monthMatrix, monthStats: monthStats
   };
 }));

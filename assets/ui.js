@@ -99,10 +99,17 @@
   function closeTop() { var f = openSheets[openSheets.length - 1]; if (f) { f(); return true; } return false; }
 
   /* ---------------- 卡片 / 片段 ---------------- */
+  /**
+   * card(title, bodyHtml, opt)
+   * opt.rawTitle = true 时 title 当 HTML 用（调用方自己保证安全，内部只用固定字符串）
+   */
   function card(title, bodyHtml, opt) {
     opt = opt || {};
+    var head = title
+      ? (opt.rawTitle ? title : esc(title))
+      : '';
     return '<div class="card' + (opt.tight ? ' tight' : '') + '">' +
-      (title ? '<div class="card-h"><h2>' + esc(title) + '</h2>' + (opt.right || '') + '</div>' : '') +
+      (title ? '<div class="card-h"><h2>' + head + '</h2>' + (opt.right || '') + '</div>' : '') +
       bodyHtml + '</div>';
   }
   function kvRows(rows) {

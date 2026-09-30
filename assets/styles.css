@@ -88,7 +88,7 @@ button, input, select { font: inherit; color: inherit; }
 }
 .teampick::-webkit-scrollbar { display: none; }
 .teampick button {
-  flex: 1 0 auto; min-width: 62px; border: 0; border-radius: 10px;
+  flex: 1 0 auto; min-width: 62px; border-radius: 10px;
   background: var(--card); color: var(--ink-2);
   display: flex; flex-direction: column; align-items: center; gap: 1px;
   padding: 6px 8px 5px; font-size: 12px; position: relative;
@@ -99,14 +99,69 @@ button, input, select { font: inherit; color: inherit; }
   width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center;
   font-size: 14px; font-weight: 700; background: var(--line); color: var(--ink-2);
 }
-.teampick button .ic[data-shift="白"] { background: rgba(217,131,36,.16); color: var(--shift-day); }
-.teampick button .ic[data-shift="中"] { background: rgba(154,75,191,.16); color: var(--shift-mid); }
-.teampick button .ic[data-shift="夜"] { background: rgba(91,75,196,.16); color: var(--shift-night); }
-.teampick button .ic[data-shift="休"] { background: rgba(74,158,106,.16); color: var(--shift-off); }
+.teampick button .ic.day { background: rgba(217,131,36,.16); color: var(--shift-day); }
+.teampick button .ic.mid { background: rgba(154,75,191,.16); color: var(--shift-mid); }
+.teampick button .ic.night { background: rgba(91,75,196,.16); color: var(--shift-night); }
+.teampick button .ic.off { background: rgba(74,158,106,.16); color: var(--shift-off); }
 .teampick button.on { border-color: var(--navy); box-shadow: 0 0 0 1px var(--navy) inset; color: var(--navy); }
 .teampick button .my {
   position: absolute; top: -5px; right: -2px; font-size: 9px; line-height: 1;
-  background: var(--ok); color: #fff; border-radius: 6px; padding: 2px 4px;
+  background: var(--ok); color: #fff; border-radius: 6px; padding: 2px 4px; font-style: normal;
+}
+
+/* ===================== 大日期（今天页的主角） ===================== */
+.datebar2 { display: flex; align-items: stretch; gap: 8px; margin-top: 12px; }
+.datebar2 .navbtn {
+  flex: none; width: 52px; border-radius: var(--r); border: 1px solid var(--line-2);
+  background: #fff; color: var(--navy); font-size: 26px; line-height: 1;
+  box-shadow: var(--shadow);
+}
+.datebar2 .navbtn:active { background: #eef1f5; }
+.bigdate {
+  flex: 1; min-width: 0; background: var(--card); border-radius: var(--r);
+  box-shadow: var(--shadow); padding: 10px 12px; cursor: pointer;
+  display: flex; align-items: baseline; justify-content: center; gap: 8px; flex-wrap: wrap;
+}
+.bigdate .bd-md { font-size: 30px; font-weight: 700; letter-spacing: .5px; line-height: 1.1; }
+.bigdate .bd-wd { font-size: 15px; color: var(--ink-2); font-weight: 600; }
+.bigdate .bd-rel { font-size: 12.5px; color: var(--muted); }
+.bigdate .bd-rel .todaytag { color: var(--ok); font-weight: 600; }
+.datebar3 { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
+
+/* ===================== 交班一览 ===================== */
+.hlist { display: flex; flex-direction: column; gap: 6px; }
+.hrow {
+  display: flex; align-items: center; gap: 10px;
+  border: 1px solid var(--line); border-radius: var(--r-sm);
+  padding: 8px 10px; background: #fbfcfe;
+}
+.hrow .hname { flex: none; width: 84px; font-size: 14px; font-weight: 600; color: var(--ink-2); }
+.hrow .hmid { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.hrow .htime { font-size: 13px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.hrow .htag {
+  font-size: 10.5px; font-weight: 600; padding: 2px 6px; border-radius: 999px;
+  background: var(--line); color: var(--ink-2); margin-left: 4px;
+}
+.hrow .hsub { font-size: 11.5px; color: var(--muted); }
+
+/* 自己那一行：整个 App 最该看清的东西 */
+.hrow.mine {
+  background: linear-gradient(180deg, #f2f7ff 0%, #e8f0fd 100%);
+  border: 2px solid var(--navy); padding: 11px 10px;
+}
+.hrow.mine .hname { font-size: 20px; color: var(--navy); width: 104px; letter-spacing: .5px; }
+.hrow.mine .chip { font-size: 14px; padding: 6px 12px; }
+.hrow.mine .htime { font-size: 17px; font-weight: 700; color: var(--navy); }
+.hrow.mine .htag { font-size: 11.5px; padding: 3px 8px; background: var(--navy); color: #fff; }
+.hrow.empty { border-style: dashed; color: var(--muted); }
+.hrow.empty .hname { color: var(--muted); font-weight: 400; }
+.hrow.now { background: linear-gradient(180deg, #eaf7ee 0%, #ddf2e4 100%); border-color: var(--ok); }
+.hrow.now .hname { color: #1d7a44; }
+.hrow.now .htime { color: #1d7a44; }
+.hrow.now .htag { background: var(--ok); }
+.nowtag {
+  font-size: 12px; font-weight: 600; color: #fff; background: var(--ok);
+  border-radius: 999px; padding: 3px 9px; vertical-align: 2px;
 }
 
 /* ===================== 卡片 ===================== */

@@ -7,7 +7,7 @@
  * 预缓存清单由构建校验：清单里的文件必须真实存在，实际文件也必须都在清单里，
  * 否则离线时会白屏。
  */
-var VERSION = 'v592a4c2b8b';
+var VERSION = 'v264da7a27a';
 var CACHE = 'shiftcal-' + VERSION;
 
 /* 相对路径：部署到 /repo/ 或 /repo/app/ 都能正确解析 */

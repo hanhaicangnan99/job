@@ -30,7 +30,6 @@
   ];
 
   var elView, elAppbar, elSub, elDatebar, elTabbar, elBanner, elTeam;
-
   /* ---------------- 小工具 ---------------- */
   function lsGet(k) {
     try { return localStorage.getItem(k); } catch (e) { return null; }
@@ -82,11 +81,12 @@
   function boot() {
     elAppbar = U.$('#appbar');
     elSub = U.$('#subtitle');
-    elDatebar = U.$('#datebar');
     elView = U.$('#view');
     elTabbar = U.$('#tabbar');
     elBanner = U.$('#banner');
-    elTeam = U.$('#teampick');
+    // 日期条和班组条都已经挪进视图里（自己渲染），顶栏不再需要它们
+    elDatebar = null;
+    elTeam = null;
 
     readStorage();
 
@@ -123,11 +123,41 @@
   }
 
   /* ---------------- 渲染 ---------------- */
+  /**
+   * 「现在这一刻在岗的是哪一段」——和看哪一天、选了哪个班都无关。
+   * 今天 06:00 打这个电话，现在在岗的就是夜班（哪怕那一格排的是休、
+   * 因为夜班 02:55 就上了，是按前一天的排班算的）。
+   */
+  function currentDuty(today) {
+    var ref = S.nowRef();
+    var segs = S.daySegments(today, ref);
+    for (var k = 0; k < segs.length; k++) {
+      if (segs[k].s <= ref && ref < segs[k].e) {
+        return {
+          index: segs[k].index, team: segs[k].team, short: segs[k].short,
+          shift: segs[k].shift, startAbs: segs[k].s, endAbs: segs[k].e,
+          range: S.mmRange(segs[k].start, segs[k].end), ref: ref
+        };
+      }
+    }
+    return null;
+  }
+
   function ctx() {
+    var today = S.todayStr();
+    var isToday = App.date === today;
+    // 只有「看的正是今天」时才按**现在的时间**算上下交班；
+    // 看别的日期就按那一天的排班算（否则会出现「9/23 的接班人是 9/22 的人」这种怪结果）
+    var ref = isToday ? S.nowRef() : null;
     return {
-      app: App, Shift: S, date: App.date, today: S.todayStr(),
+      app: App, Shift: S, date: App.date, today: today, isToday: isToday, ref: ref,
       teamIndex: App.team, team: S.team(App.team),
       month: App.month, myTeam: App.myTeam,
+      // 「现在在岗的是谁」（只在看今天时给）
+      onDutyNow: isToday ? currentDuty(today) : null,
+      // 交班关系（接班 / 交班）一次算好，交给视图渲染
+      handover: S.handover(App.date, App.team, ref),
+      roster: S.dayRoster(App.date, App.team, ref),
       go: App.go, setDate: App.setDate, setTeam: App.setTeam, setMonth: App.setMonth,
       refresh: render
     };
@@ -145,46 +175,20 @@
     if (view.mount) view.mount(elView, c);
 
     renderAppbar();
-    renderTeamPick();
     renderTabs();
     if (y) window.scrollTo(0, Math.min(y, document.body.scrollHeight));
   }
 
   function renderAppbar() {
-    var t = S.team(App.team);
-    document.getElementById('title').textContent = '倒班日历';
-    elSub.textContent = App.view === 'overview'
-      ? '五班三倒 · 10 日一轮 · ' + U.monthLabel(App.month.y, App.month.m) + ' 总貌'
-      : '五班三倒 · 10 日一轮 · 当前看 ' + t.name;
-
-    if (App.view !== 'shift') { elDatebar.innerHTML = ''; elDatebar.hidden = true; return; }
-    elDatebar.hidden = false;
-
-    var today = S.todayStr();
-    var off = S.daysBetween(today, App.date);
-    var rel = App.date === today ? '今天' : (off === 1 ? '明天' : off === -1 ? '昨天' :
-      (off > 0 ? off + ' 天后' : Math.abs(off) + ' 天前'));
-    var d = S.dayIndexOf(App.date, App.team);
-    var sh = S.shiftOf(App.date, App.team);
-
-    elDatebar.innerHTML =
-      '<button class="nav" data-d="-1" aria-label="前一天">‹</button>' +
-      '<div class="label" data-act="pick-date">' + App.date + '　' + S.weekday(App.date) +
-      '<small>' + rel + '　·　' + t.name + ' 轮转第 ' + d + ' 天　·　' +
-      U.chip(sh) + '</small></div>' +
-      '<button class="nav" data-d="1" aria-label="后一天">›</button>' +
-      '<button class="nav" data-act="today" aria-label="回到今天">◉</button>';
-  }
-
-  function renderTeamPick() {
-    elTeam.innerHTML = S.TEAMS.map(function (name, i) {
-      var st = S.shiftOf(S.todayStr(), i);
-      return '<button type="button" data-team="' + i + '"' + (i === App.team ? ' class="on"' : '') + '>' +
-        '<b>' + U.esc(name) + '</b>' +
-        '<span class="ic" data-shift="' + U.esc(st) + '">' + U.esc(S.SHIFT_BADGE[st]) + '</span>' +
-        (App.myTeam === i ? '<span class="my">我的</span>' : '') +
-        '</button>';
-    }).join('');
+    var title = document.getElementById('title');
+    if (title) title.textContent = '倒班日历';
+    if (elSub) {
+      elSub.textContent = App.view === 'overview'
+        ? '五班三倒 · 10 日一轮 · ' + U.monthLabel(App.month.y, App.month.m) + ' 总貌'
+        : '五班三倒 · 10 日一轮';
+    }
+    // 日期条已经挪进视图里（上面那条大的），顶栏这条不再用
+    if (elDatebar) { elDatebar.innerHTML = ''; elDatebar.hidden = true; }
   }
 
   function renderTabs() {
@@ -207,34 +211,24 @@
 
   /* ---------------- 事件 ---------------- */
   function bindGlobals() {
-    elTeam.addEventListener('click', function (e) {
-      var b = e.target.closest('[data-team]');
-      if (b) App.setTeam(+b.dataset.team);
-    });
-
     elTabbar.addEventListener('click', function (e) {
       var b = e.target.closest('[data-tab]');
       if (b) App.go(b.dataset.tab);
     });
 
-    elDatebar.addEventListener('click', function (e) {
-      var t = e.target.closest('[data-d],[data-act]');
-      if (!t) return;
-      if (t.dataset.d) { App.shiftDate(+t.dataset.d); return; }
-      if (t.dataset.act === 'today') { App.setDate(S.todayStr()); return; }
-      if (t.dataset.act === 'pick-date') { openDatePicker(); }
-    });
-
-    // 视图里所有 data-* 动作统一在这里分发
+    // 视图里所有 data-* 动作统一在这里分发（日期条和班组条都挪进视图了，所以都在这一条里）
     elView.addEventListener('click', function (e) {
-      var t = e.target.closest('[data-act],[data-team],[data-cell]');
+      var t = e.target.closest('[data-act],[data-team],[data-cell],[data-d]');
       if (!t) return;
+      // 前后一天优先（按钮上只有 data-d）
+      if (t.dataset.d != null && t.dataset.d !== '') { App.shiftDate(+t.dataset.d); return; }
       // data-cell（总貌格子）优先：它同时带 data-team，不能被下面那条截走
       if (t.dataset.cell) { openCell(t.dataset.cell, t.dataset.team); return; }
       if (t.dataset.team != null && t.dataset.team !== '') { App.setTeam(+t.dataset.team); return; }
       var act = t.dataset.act;
       if (!act || act === 'actions') return;
       if (act === 'today') { App.setDate(S.todayStr()); if (App.month) App.setMonth(+S.todayStr().slice(0, 4), +S.todayStr().slice(5, 7)); return; }
+      if (act === 'pick-date') { openDatePicker(); return; }
       if (act === 'prev-day') { App.shiftDate(-1); return; }
       if (act === 'next-day') { App.shiftDate(1); return; }
       if (act === 'prev-month') { App.setMonth(App.month.y, App.month.m - 1); return; }
