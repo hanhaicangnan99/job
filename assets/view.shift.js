@@ -37,17 +37,34 @@
 
   /* ==================================================================
    * 2) 班组选择器（牌子上的班次跟着所看日期变）
+   *    右边常驻一个「我的」按钮，点一下直接跳回我的班组。
+   *    注意：原来贴在按钮右上角的「我的」小标已经去掉 ——
+   *    那一行是横向滚动容器（overflow-x:auto），负偏移的标会被裁掉一半。
    * ================================================================== */
+  function myTeamIndex(ctx) {
+    return ctx.myTeam == null ? S.MY_TEAM : ctx.myTeam;
+  }
+
   function teamPick(ctx) {
     var d = ctx.date;
-    return '<div class="teampick">' + S.TEAMS.map(function (name, i) {
+    var mine = myTeamIndex(ctx);
+    var buttons = S.TEAMS.map(function (name, i) {
       var sh = S.shiftOf(d, i);
-      return '<button type="button" data-team="' + i + '"' + (i === ctx.teamIndex ? ' class="on"' : '') + '>' +
+      var isMe = i === mine;
+      return '<button type="button" data-team="' + i + '"' +
+        (i === ctx.teamIndex ? ' class="on"' : '') +
+        ' aria-label="' + U.esc(name + (isMe ? '（我的班组）' : '')) + '">' +
         '<b>' + U.esc(name) + '</b>' +
         '<span class="ic ' + S.SHIFT_CLASS[sh] + '">' + U.esc(S.SHIFT_BADGE[sh]) + '</span>' +
-        (ctx.myTeam === i ? '<i class="my">我的</i>' : '') +
         '</button>';
-    }).join('') + '</div>';
+    }).join('');
+
+    return '<div class="teamrow">' +
+      '<div class="teampick">' + buttons + '</div>' +
+      '<button type="button" class="myjump' + (ctx.teamIndex === mine ? ' on' : '') + '"' +
+      ' data-team="' + mine + '" aria-label="回到我的班组 ' + U.esc(S.TEAMS[mine]) + '">' +
+      '<em>我的</em><b>' + U.esc(S.TEAMS[mine]) + '</b></button>' +
+      '</div>';
   }
 
   /* ==================================================================
