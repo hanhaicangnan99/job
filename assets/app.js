@@ -369,7 +369,6 @@
     var c = ctx();
     swapHtml('#headHost', P.bigDate(c));
     swapHtml('#pickHost', P.teamPick(c));
-    swapHtml('#teamHeadHost', P.teamToday(c));
     swapHtml('#ovHost', P.overview(c));
   }
 

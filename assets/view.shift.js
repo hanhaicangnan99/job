@@ -99,27 +99,9 @@
       });
     }
 
-    // 我这一天休息 → 补一行"我的休息"。
-    // 补在**我这一格该在的位置**上（不是永远排最后）——这样时间轴才是连贯的：
-    // 夜 → 白 → 中 → （我休）→ 夜 → 白 → …
-    if (me != null) {
-      var hasMine = false;
-      for (var q = 0; q < rows.length; q++) if (rows[q].mine) hasMine = true;
-      if (!hasMine) {
-        var myPlan = S.shiftOf(d, me);
-        var at = rows.length;
-        for (var r0 = 0; r0 < rows.length; r0++) {
-          var pi = order.indexOf(myPlan);
-          if (pi < 0) break;                       // 计划是"休"，放最后
-          if (order.indexOf(rows[r0].shift) > pi) { at = r0; break; }
-        }
-        rows.splice(at, 0, {
-          shift: '休', index: me, team: S.team(me).name, range: '',
-          mine: true, rest: true, planIndex: order.indexOf(myPlan)
-        });
-      }
-    }
-
+    // 注意：这里**不再**补"我这一天休息"那一行。
+    // 时间轴上每天就是当天在岗的三个班（夜→白→中），我那天的班次看
+    // 卡片头上写的那一行，或者看值班按钮上的字就够了。
     for (var r2 = 0; r2 < rows.length; r2++) {
       if (onNow && rows[r2].index === me && !rows[r2].rest) { rows[r2].now = true; rows[r2].range = now.range; }
     }
@@ -204,42 +186,6 @@
       '</div></div>';
   }
 
-  /**
-   * 卡片头上那一行：**正在看的这个班组，这天到底上什么班**。
-   * 三行是按班次排的（夜/白/中），所以当这个班休息时，三行里根本没有它 ——
-   * 光看那三行看不出"他现在是什么班"，这一行就是回答这个问题的。
-   */
-  function teamToday(ctx) {
-    var name = ctx.team.name;
-    var h = ctx.handover || S.handover(ctx.date, ctx.teamIndex, ctx.ref);
-    var onNow = ctx.onDutyNow && ctx.onDutyNow.index === ctx.teamIndex;
-    var cls, label, time = '';
-
-    if (h.onDuty) {
-      cls = S.SHIFT_CLASS[h.shift];
-      label = S.SHIFT_NAME[h.shift];
-      time = h.range || S.mmRange(h.start, h.end);
-    } else {
-      // 休息。可能是"昨晚的中班还没下"或"今天的夜班已经下了"，那也算今天在岗过
-      var py = S.addDays(ctx.date, -1);
-      var carried = S.shiftOf(py, ctx.teamIndex);
-      if (carried === '中') {
-        cls = S.SHIFT_CLASS['中']; label = '中班'; time = '上到次日 02:55';
-      } else if (S.shiftOf(ctx.date, ctx.teamIndex) === '夜') {
-        cls = S.SHIFT_CLASS['夜']; label = '夜班'; time = '02:55-10:25';
-      } else {
-        cls = S.SHIFT_CLASS['休']; label = '休息';
-      }
-    }
-
-    return '<div class="teamhead">' +
-      '<b>' + U.esc(name) + '</b>' +
-      '<span class="chip ' + cls + '">' + U.esc(label) + '</span>' +
-      (time ? '<span class="htime">' + U.esc(time) + '</span>' : '') +
-      (onNow ? '<span class="nowtag">正在上班</span>' : '') +
-      '</div>';
-  }
-
   /* ==================================================================
    * 4) 总貌图：当月 5 个班组 × 每一天
    * ================================================================== */
@@ -290,8 +236,9 @@
     out.push('<div class="main-col">');
     out.push('<div id="headHost">' + bigDate(ctx) + '</div>');
     out.push('<div id="pickHost">' + teamPick(ctx) + '</div>');
-    // 班次卡：头上写明"正在看的这个班组今天什么班"，下面是可以上下滚的连续时间轴
-    out.push('<div class="card tight rows-card"><div id="teamHeadHost">' + teamToday(ctx) + '</div>' +
+    // 班次卡：不再放"XX今天什么班"那一行（值班按钮上已经写了），
+    // 卡片里直接就是可以上下滚的连续时间轴
+    out.push('<div class="card tight rows-card">' +
       '<div class="hlist" id="rowsList">' + timeline(ctx) + '</div></div>');
     out.push('</div>');
     out.push('<div class="ov-col" id="ovHost">' + overview(ctx) + '</div>');
@@ -306,7 +253,7 @@
     id: 'shift', title: '倒班日历', render: render, mount: mount,
     // 滚动时按需局部刷新用
     parts: {
-      bigDate: bigDate, teamPick: teamPick, teamToday: teamToday, overview: overview
+      bigDate: bigDate, teamPick: teamPick, overview: overview
     }
   };
 }));
