@@ -133,6 +133,42 @@
       '</div></div>';
   }
 
+  /**
+   * 卡片头上那一行：**正在看的这个班组，这天到底上什么班**。
+   * 三行是按班次排的（夜/白/中），所以当这个班休息时，三行里根本没有它 ——
+   * 光看那三行看不出"他现在是什么班"，这一行就是回答这个问题的。
+   */
+  function teamToday(ctx) {
+    var name = ctx.team.name;
+    var h = ctx.handover || S.handover(ctx.date, ctx.teamIndex, ctx.ref);
+    var onNow = ctx.onDutyNow && ctx.onDutyNow.index === ctx.teamIndex;
+    var cls, label, time = '';
+
+    if (h.onDuty) {
+      cls = S.SHIFT_CLASS[h.shift];
+      label = S.SHIFT_NAME[h.shift];
+      time = h.range || S.mmRange(h.start, h.end);
+    } else {
+      // 休息。可能是"昨晚的中班还没下"或"今天的夜班已经下了"，那也算今天在岗过
+      var py = S.addDays(ctx.date, -1);
+      var carried = S.shiftOf(py, ctx.teamIndex);
+      if (carried === '中') {
+        cls = S.SHIFT_CLASS['中']; label = '中班'; time = '上到次日 02:55';
+      } else if (S.shiftOf(ctx.date, ctx.teamIndex) === '夜') {
+        cls = S.SHIFT_CLASS['夜']; label = '夜班'; time = '02:55-10:25';
+      } else {
+        cls = S.SHIFT_CLASS['休']; label = '休息';
+      }
+    }
+
+    return '<div class="teamhead">' +
+      '<b>' + U.esc(name) + '</b>' +
+      '<span class="chip ' + cls + '">' + U.esc(label) + '</span>' +
+      (time ? '<span class="htime">' + U.esc(time) + '</span>' : '') +
+      (onNow ? '<span class="nowtag">正在上班</span>' : '') +
+      '</div>';
+  }
+
   /* ==================================================================
    * 4) 总貌图：当月 5 个班组 × 每一天
    * ================================================================== */
@@ -183,9 +219,9 @@
     out.push('<div class="main-col">');
     out.push(bigDate(ctx));
     out.push(teamPick(ctx));
-    // 班次卡不带标题：上面那三/四行已经说清楚"我是什么班"了
-    out.push('<div class="card tight rows-card"><div class="hlist">' +
-      shiftRows(ctx, i).map(shiftRow).join('') + '</div></div>');
+    // 班次卡：头上写明"正在看的这个班组今天什么班"，下面 夜/白/中 三行（我休息时多一行）
+    out.push('<div class="card tight rows-card">' + teamToday(ctx) +
+      '<div class="hlist">' + shiftRows(ctx, i).map(shiftRow).join('') + '</div></div>');
     out.push('</div>');
     out.push('<div class="ov-col">' + overview(ctx) + '</div>');
     return out.join('');

@@ -190,6 +190,15 @@ button, input, select { font: inherit; color: inherit; }
   font-size: 12px; font-weight: 600; color: #fff; background: var(--ok);
   border-radius: 999px; padding: 3px 9px; vertical-align: 2px;
 }
+/* 卡片头：正在看的这个班组今天什么班（别人休息时三行里没有他，全靠这一行） */
+.teamhead {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 7px;
+  padding: 0 2px 9px; border-bottom: 1px solid var(--line); margin-bottom: 9px;
+}
+.teamhead b { font-size: 15.5px; font-weight: 700; color: var(--navy); }
+.teamhead .htime { font-size: 13.5px; font-weight: 600; color: var(--ink-2); }
+.teamhead .nowtag { font-size: 11.5px; padding: 2px 8px; }
+
 /* 每行左侧一道该班次的颜色条，夜/白/中 一眼分得开 */
 .hrow.s-night { border-left: 4px solid var(--shift-night); }
 .hrow.s-day { border-left: 4px solid var(--shift-day); }
