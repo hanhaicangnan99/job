@@ -81,9 +81,7 @@
       rows.push({
         shift: sh, index: who, team: S.team(who).name,
         range: startedPrev ? ('18:55-次日' + S.hhmm(sp.end)) : S.mmRange(sp.start, sp.end),
-        mine: who === i,
-        brief: startedPrev ? ('从 ' + S.addDays(d, -1).slice(5) + ' 晚上上到现在')
-          : (sp.end > 1440 ? '跨零点，次日 ' + S.hhmm(sp.end) + ' 下班' : '')
+        mine: who === i
       });
     }
 
@@ -92,8 +90,7 @@
     for (var q = 0; q < rows.length; q++) if (rows[q].mine) hasMine = true;
     if (!hasMine) {
       rows.push({
-        shift: '休', index: i, team: S.team(i).name, range: '', mine: true, rest: true,
-        brief: '这一天不上班'
+        shift: '休', index: i, team: S.team(i).name, range: '', mine: true, rest: true
       });
     }
 
@@ -108,7 +105,8 @@
       + (r.mine ? ' mine' : '')
       + (r.rest ? ' restrow' : '')
       + (r.now ? ' now' : '');
-    var tag = r.rest ? '休息' : (r.mine ? (r.now ? '我 · 在岗' : '我') : '');
+    // 休息那一行不再加灰色「休息」标（右边那个绿色徽章已经说明是休息了）
+    var tag = r.rest ? '' : (r.mine ? (r.now ? '我 · 在岗' : '我') : '');
     return '<div class="' + cls + '">' +
       '<div class="hname">' + U.esc(r.team) +
       (tag ? '<span class="htag">' + U.esc(tag) + '</span>' : '') + '</div>' +
