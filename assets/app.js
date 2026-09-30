@@ -83,10 +83,11 @@
 
   /* ---------------- 启动 ---------------- */
   function boot() {
-    elAppbar = U.$('#appbar');
-    elSub = U.$('#subtitle');
     elView = U.$('#view');
     elBanner = U.$('#banner');
+    // 顶栏整条已经删掉（标题/副标题都不要了），安装按钮挪到 banner 那一条里
+    elAppbar = null;
+    elSub = null;
 
     readStorage();
 
@@ -184,25 +185,22 @@
     if (holder) elView.appendChild(holder);
     if (view.mount) view.mount(elView, c);
 
-    renderAppbar();
     if (y) window.scrollTo(0, Math.min(y, document.body.scrollHeight));
   }
 
-  function renderAppbar() {
-    var title = document.getElementById('title');
-    if (title) title.textContent = '倒班日历';
-    if (elSub) elSub.textContent = '五班三倒 · 10 日一轮';
-  }
-
   function renderBanner() {
+    // 顶栏删了，这条 banner 现在只负责"装到桌面"的提示（有才显示）
     var mem = false;
     try {
       localStorage.setItem('__shift_probe__', '1');
       localStorage.removeItem('__shift_probe__');
     } catch (e) { mem = true; }
-    if (!mem) { elBanner.hidden = true; elBanner.innerHTML = ''; return; }
-    elBanner.hidden = false;
-    elBanner.innerHTML = '<span class="grow">⚠ 这个浏览器不让存东西（隐私模式？）</span>';
+    if (mem) {
+      elBanner.hidden = false;
+      elBanner.innerHTML = '<span class="grow">⚠ 这个浏览器不让存东西（隐私模式？）</span>';
+      return;
+    }
+    if (!root.__deferredInstall) { elBanner.hidden = true; elBanner.innerHTML = ''; }
   }
 
   /* ---------------- 事件 ---------------- */
@@ -222,6 +220,7 @@
       if (act === 'pick-date') { openDatePicker(); return; }
       if (act === 'prev-month') { App.setMonth(App.month.y, App.month.m - 1); return; }
       if (act === 'next-month') { App.setMonth(App.month.y, App.month.m + 1); return; }
+      if (act === 'install-hide' || act === 'install') { hideBanner(); return; }
     });
 
     document.addEventListener('keydown', function (e) {
@@ -373,22 +372,47 @@
       });
     });
   }
+  /**
+   * 安装到桌面：顶栏删了，所以把入口放在最上面那条 banner 里。
+   * 浏览器给 beforeinstallprompt 时才出现，平时完全不占地方。
+   */
   function wireInstall() {
     window.addEventListener('beforeinstallprompt', function (e) {
       e.preventDefault();
       root.__deferredInstall = e;
-      var ib = U.$('.btn-install', elAppbar);
-      if (ib) ib.hidden = false;
+      showInstallBar();
     });
     window.addEventListener('appinstalled', function () {
       root.__deferredInstall = null;
-      var ib = U.$('.btn-install', elAppbar);
-      if (ib) ib.hidden = true;
+      if (elBanner) { elBanner.hidden = true; elBanner.innerHTML = ''; }
       U.toast('已安装到桌面');
     });
-    var ib = U.$('.btn-install', elAppbar);
-    if (ib) ib.addEventListener('click', function () {
-      if (root.__deferredInstall) root.__deferredInstall.prompt();
+  }
+
+  function hideBanner() {
+    if (!elBanner) return;
+    elBanner.hidden = true;
+    elBanner.innerHTML = '';
+  }
+
+  function showInstallBar() {
+    if (!elBanner) return;
+    elBanner.hidden = false;
+    elBanner.innerHTML = '<span class="grow">把「倒班日历」装到桌面？</span>' +
+      '<button type="button" class="banner-btn" data-act="install">安装</button>' +
+      '<button type="button" class="banner-btn ghost" data-act="install-hide">不用</button>';
+    wireGlobalActions(elBanner);
+  }
+
+  /** 给一个容器挂上和 #view 同一套 data-act 处理（banner 里也要能用） */
+  function wireGlobalActions(el) {
+    el.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-act]');
+      if (!b) return;
+      if (b.dataset.act === 'install') {
+        if (root.__deferredInstall) root.__deferredInstall.prompt();
+      }
+      hideBanner();
     });
   }
 

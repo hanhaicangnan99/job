@@ -16,7 +16,7 @@
   'use strict';
 
   /* ==================================================================
-   * 1) 大日期
+   * 1) 大日期（点日期打开月历；右边一个「今天」）
    * ================================================================== */
   function bigDate(ctx) {
     var d = ctx.date, today = S.todayStr();
@@ -30,11 +30,8 @@
       '<span class="bd-wd">' + S.weekday(d) + '</span>' +
       '<span class="bd-rel">' + (d === today ? '今天' : U.esc(rel)) + '</span>' +
       '</div>' +
+      '<button class="navbtn" data-act="today" aria-label="回到今天" title="回到今天">今</button>' +
       '<button class="navbtn" data-d="1" aria-label="后一天">›</button>' +
-      '</div>' +
-      '<div class="datebar3">' +
-      '<button class="btn sm" data-act="pick-date">📅 点这里选日期</button>' +
-      '<button class="btn sm" data-act="today">回今天</button>' +
       '</div>';
   }
 
@@ -122,16 +119,6 @@
       '</div></div>';
   }
 
-  function monthTitle(ctx) {
-    var h = ctx.handover || S.handover(ctx.date, ctx.teamIndex, ctx.ref);
-    if (ctx.onDutyNow && ctx.onDutyNow.index === ctx.teamIndex) {
-      return S.SHIFT_NAME[ctx.onDutyNow.shift] + '　' + ctx.onDutyNow.range +
-        '　<span class="nowtag">正在上班</span>';
-    }
-    if (!h.onDuty) return ctx.team.name + '　休息';
-    return S.SHIFT_NAME[h.shift] + '　' + h.range;
-  }
-
   /* ==================================================================
    * 4) 总貌图：当月 5 个班组 × 每一天
    * ================================================================== */
@@ -141,7 +128,7 @@
     var today = S.todayStr();
     var out = [];
 
-    out.push('<div class="row between mb10">' +
+    out.push('<div class="row between mb6">' +
       '<button class="btn sm" data-act="prev-month">‹ 上月</button>' +
       '<b>' + U.monthLabel(m.y, m.m) + '</b>' +
       '<button class="btn sm" data-act="next-month">下月 ›</button>' +
@@ -172,11 +159,6 @@
 
     out.push('<div class="mxwrap"><table class="mx">' +
       '<thead>' + head + '</thead><tbody>' + body + '</tbody></table></div>');
-    out.push('<div class="legend mt6">' +
-      Object.keys(S.SHIFT_NAME).map(function (k) {
-        return '<span><i class="lg ' + S.SHIFT_CLASS[k] + '"></i>' + U.esc(S.SHIFT_NAME[k]) + '</span>';
-      }).join('') +
-      '<span>点格子 = 跳到那天</span></div>');
     return out.join('');
   }
 
@@ -187,9 +169,9 @@
     out.push('<div class="main-col">');
     out.push(bigDate(ctx));
     out.push(teamPick(ctx));
-    out.push(U.card(monthTitle(ctx),
-      '<div class="hlist">' + shiftRows(ctx, i).map(shiftRow).join('') + '</div>',
-      { rawTitle: true }));
+    // 班次卡不带标题：上面那三/四行已经说清楚"我是什么班"了
+    out.push('<div class="card tight rows-card"><div class="hlist">' +
+      shiftRows(ctx, i).map(shiftRow).join('') + '</div></div>');
     out.push('</div>');
     out.push('<div class="ov-col">' + overview(ctx) + '</div>');
     return out.join('');

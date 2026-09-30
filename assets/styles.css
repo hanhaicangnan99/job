@@ -48,8 +48,8 @@ body {
   color: var(--ink);
   font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
         "Hiragino Sans GB", "Microsoft YaHei", "微软雅黑", sans-serif;
-  /* 没有底部标签栏了，只留一点点呼吸位；总貌那一块自己贴在视口底部 */
-  padding-bottom: 8px;
+  /* 没有底部标签栏了；总貌那一块自己贴在视口底部，所以底部不留白 */
+  padding-bottom: 0;
   overscroll-behavior-y: none;
 }
 h1, h2, h3 { margin: 0; font-weight: 600; }
@@ -58,74 +58,56 @@ button, input, select { font: inherit; color: inherit; }
 
 .wrap { max-width: 720px; margin: 0 auto; padding: 0 12px; }
 
-/* ===================== 顶栏 ===================== */
-.appbar {
-  position: sticky; top: 0; z-index: 40;
-  background: linear-gradient(180deg, var(--navy) 0%, var(--navy-2) 100%);
-  color: #fff;
-  padding: calc(10px + var(--safe-t)) 0 8px;
-  box-shadow: 0 2px 10px rgba(15, 30, 55, .18);
+/* ===================== 顶栏（已删除，只留一小段占位说明） ===================== */
+/* 原来的 .appbar（倒班日历 / 五班三倒·10 日一轮 / 安装按钮）整条都删了，
+   日期和班组直接画在页面里，省下 75px 纵向高度。 */
+
+/* 安装提示条 */
+.banner-btn {
+  background: #fff; color: var(--bad); border: 0; border-radius: 999px;
+  padding: 4px 12px; font-size: 12.5px; font-weight: 600; white-space: nowrap;
 }
-.appbar .row { display: flex; align-items: center; gap: 10px; }
-.appbar h1 { font-size: 17px; letter-spacing: .3px; flex: 1; min-width: 0;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.appbar .sub { font-size: 12px; opacity: .82; margin-top: 2px; }
-.appbar .btn-install {
-  background: #fff; color: var(--navy); border: 0; border-radius: 999px;
-  padding: 8px 14px; font-size: 13px; font-weight: 600; white-space: nowrap;
-}
-.datebar { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
-.datebar .nav {
-  background: rgba(255,255,255,.16); border: 0; color: #fff; border-radius: 8px;
-  width: 34px; height: 34px; font-size: 16px; flex: none;
-}
-.datebar .label { flex: 1; text-align: center; font-size: 14px; font-weight: 600; cursor: pointer; }
-.datebar .label small { display: block; font-weight: 400; font-size: 11px; opacity: .85; line-height: 1.5; }
+.banner-btn.ghost { background: transparent; color: #fff; font-weight: 400; }
 
 /* ===================== 页面骨架：把总貌钉在页面下方 ===================== */
 /*
- * 目标：不管班次卡是 3 行还是 4 行，总貌图都停在**同一个位置、屏幕下方**，不上下跳。
- * 数字都是 390×844 实测出来的，不是估的：
+ * 目标：**一屏看全，不用滑**。数字都是 390×844 实测出来的，不是估的：
  *   班次卡 hlist = 251px（4 行时的自然高度）→ 设成 min-height，
- *     3 行时多出来的 77px 用 justify-content: center 摊到上下，整张卡就恒定 312px；
- *   地面上方（顶栏 75 + 日期区 88 + 班组条 61 + 卡 312 + 边距 76）= 644px，
- *     再加总貌自己 227px（月份行 + 表格 159 + 图例）≈ 871px。
- * 所以主列（日期 + 班组 + 班次卡）撑满「视口高 − 总貌占的 220px」，
- * 总貌用 margin-top: auto 沉到剩余空间的底部。
- * 内容比一屏高时（比如小屏机）总貌会贴住视口底边（sticky），一直看得见。
+ *     3 行时多出来的 77px 用 justify-content: center 摊到上下，整张卡恒定 312px；
+ *   总貌那一块（月份行 + 表格 159 + 上下留白）≈ 200px。
+ * 所以主列（日期 + 班组 + 班次卡）撑满「视口高 − 200px」，
+ * 总貌用 margin-top: auto 沉到剩余空间底部，贴住视口下沿。
  */
-.main-col { display: flex; flex-direction: column; min-height: calc(100vh - 220px); }
+.main-col { display: flex; flex-direction: column; }
 .ov-col {
-  margin-top: auto;
   position: sticky; bottom: 0; z-index: 2;
   background: var(--bg);
-  padding-top: 6px;
+  padding-top: 4px;
   box-shadow: 0 -6px 12px -8px rgba(22, 32, 43, .18);
 }
-.hlist { min-height: 251px; justify-content: center; }
+.hlist { min-height: 205px; justify-content: center; }
 
 /* ===================== 日期条 / 班组条：高度固定，不随内容变 ===================== */
-.datebar2 { min-height: 54px; }
-.datebar3 { min-height: 34px; }
-.teampick { min-height: 61px; }
+.datebar2 { min-height: 46px; }
+.teampick { min-height: 55px; }
 
 /* ===================== 班组选择器 ===================== */
 .teampick {
-  display: flex; gap: 6px; overflow-x: auto; -webkit-overflow-scrolling: touch;
-  scrollbar-width: none; margin-top: 8px; padding-bottom: 2px;
+  display: flex; gap: 5px; overflow-x: auto; -webkit-overflow-scrolling: touch;
+  scrollbar-width: none; margin-top: 4px; padding-bottom: 1px;
 }
 .teampick::-webkit-scrollbar { display: none; }
 .teampick button {
-  flex: 1 0 auto; min-width: 62px; border-radius: 10px;
+  flex: 1 0 auto; min-width: 58px; border-radius: 9px;
   background: var(--card); color: var(--ink-2);
-  display: flex; flex-direction: column; align-items: center; gap: 1px;
-  padding: 6px 8px 5px; font-size: 12px; position: relative;
+  display: flex; flex-direction: column; align-items: center; gap: 0;
+  padding: 3px 6px 3px; font-size: 11.5px; position: relative;
   border: 1px solid var(--line);
 }
-.teampick button b { font-weight: 600; font-size: 12.5px; }
+.teampick button b { font-weight: 600; font-size: 12px; }
 .teampick button .ic {
-  width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center;
-  font-size: 14px; font-weight: 700; background: var(--line); color: var(--ink-2);
+  width: 22px; height: 22px; border-radius: 7px; display: grid; place-items: center;
+  font-size: 13px; font-weight: 700; background: var(--line); color: var(--ink-2);
 }
 .teampick button .ic.day { background: rgba(217,131,36,.16); color: var(--shift-day); }
 .teampick button .ic.mid { background: rgba(154,75,191,.16); color: var(--shift-mid); }
@@ -138,32 +120,32 @@ button, input, select { font: inherit; color: inherit; }
 }
 
 /* ===================== 大日期（今天页的主角） ===================== */
-.datebar2 { display: flex; align-items: stretch; gap: 8px; margin-top: 12px; }
+.datebar2 { display: flex; align-items: stretch; gap: 6px; margin-top: 6px; }
 .datebar2 .navbtn {
-  flex: none; width: 52px; border-radius: var(--r); border: 1px solid var(--line-2);
-  background: #fff; color: var(--navy); font-size: 26px; line-height: 1;
+  flex: none; width: 46px; border-radius: var(--r); border: 1px solid var(--line-2);
+  background: #fff; color: var(--navy); font-size: 24px; line-height: 1;
   box-shadow: var(--shadow);
 }
+.datebar2 .navbtn[data-act="today"] { font-size: 15px; font-weight: 600; width: 42px; }
 .datebar2 .navbtn:active { background: #eef1f5; }
 .bigdate {
   flex: 1; min-width: 0; background: var(--card); border-radius: var(--r);
-  box-shadow: var(--shadow); padding: 10px 12px; cursor: pointer;
+  box-shadow: var(--shadow); padding: 6px 10px; cursor: pointer;
   display: flex; align-items: baseline; justify-content: center; gap: 8px; flex-wrap: wrap;
 }
-.bigdate .bd-md { font-size: 30px; font-weight: 700; letter-spacing: .5px; line-height: 1.1; }
-.bigdate .bd-wd { font-size: 15px; color: var(--ink-2); font-weight: 600; }
-.bigdate .bd-rel { font-size: 12.5px; color: var(--muted); }
+.bigdate .bd-md { font-size: 27px; font-weight: 700; letter-spacing: .5px; line-height: 1.15; }
+.bigdate .bd-wd { font-size: 14px; color: var(--ink-2); font-weight: 600; }
+.bigdate .bd-rel { font-size: 12px; color: var(--muted); }
 .bigdate .bd-rel .todaytag { color: var(--ok); font-weight: 600; }
-.datebar3 { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
 
 /* ===================== 交班一览 ===================== */
-.hlist { display: flex; flex-direction: column; gap: 6px; }
+.hlist { display: flex; flex-direction: column; gap: 5px; }
 .hrow {
   display: flex; align-items: center; gap: 10px;
   border: 1px solid var(--line); border-radius: var(--r-sm);
-  padding: 8px 10px; background: #fbfcfe;
+  padding: 5px 10px; background: #fbfcfe;
 }
-.hrow .hname { flex: none; width: 84px; font-size: 14px; font-weight: 600; color: var(--ink-2); white-space: nowrap; }
+.hrow .hname { flex: none; width: 84px; font-size: 13.5px; font-weight: 600; color: var(--ink-2); white-space: nowrap; }
 .hrow .hmid { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .hrow .htime { font-size: 13px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
 .hrow .htag {
@@ -175,11 +157,11 @@ button, input, select { font: inherit; color: inherit; }
 /* 自己那一行：整个 App 最该看清的东西 */
 .hrow.mine {
   background: linear-gradient(180deg, #f2f7ff 0%, #e8f0fd 100%);
-  border: 2px solid var(--navy); padding: 11px 10px;
+  border: 2px solid var(--navy); padding: 8px 10px;
 }
-.hrow.mine .hname { font-size: 20px; color: var(--navy); width: 126px; letter-spacing: .5px; white-space: nowrap; }
-.hrow.mine .chip { font-size: 14px; padding: 6px 12px; }
-.hrow.mine .htime { font-size: 17px; font-weight: 700; color: var(--navy); }
+.hrow.mine .hname { font-size: 19px; color: var(--navy); width: 122px; letter-spacing: .5px; white-space: nowrap; }
+.hrow.mine .chip { font-size: 13.5px; padding: 5px 11px; }
+.hrow.mine .htime { font-size: 16px; font-weight: 700; color: var(--navy); }
 .hrow.mine .htag { font-size: 11.5px; padding: 3px 8px; background: var(--navy); color: #fff; }
 .hrow.empty { border-style: dashed; color: var(--muted); }
 .hrow.empty .hname { color: var(--muted); font-weight: 400; }
@@ -203,7 +185,11 @@ button, input, select { font: inherit; color: inherit; }
 /* ===================== 卡片 ===================== */
 .card {
   background: var(--card); border-radius: var(--r); box-shadow: var(--shadow);
-  padding: 14px; margin-top: 12px;
+  padding: 14px; margin-top: 8px;
+}
+.card.rows-card {
+  padding: 8px 12px 10px;
+  margin-top: 6px;
 }
 .card.tight { padding: 12px; }
 .card-h { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
@@ -326,11 +312,11 @@ table.mx { border-collapse: collapse; font-size: 11px; }
 table.mx th, table.mx td { border: 1px solid var(--line); text-align: center; }
 table.mx thead th {
   background: #f7f9fc; color: var(--ink-2); font-weight: 600;
-  padding: 2px 0; min-width: 25px; width: 25px;
+  padding: 1px 0; min-width: 24px; width: 24px;
   font-variant-numeric: tabular-nums;
 }
-table.mx thead th .dd { display: block; font-size: 11px; line-height: 1.2; }
-table.mx thead th .wd { display: block; font-size: 8.5px; color: var(--muted); line-height: 1.2; }
+table.mx thead th .dd { display: block; font-size: 10.5px; line-height: 1.15; }
+table.mx thead th .wd { display: block; font-size: 8px; color: var(--muted); line-height: 1.15; }
 table.mx thead th.istoday { background: var(--navy); color: #fff; }
 table.mx thead th.istoday .wd { color: rgba(255,255,255,.75); }
 table.mx th.stickyc, table.mx td.stickyc {
@@ -345,7 +331,7 @@ table.mx th.stickyc .my {
 }
 table.mx tr.mine td.stickyc { background: #eef3fb; color: var(--navy); }
 table.mx td.shiftcell {
-  height: 26px; cursor: pointer; position: relative; font-weight: 700; font-size: 12.5px;
+  height: 16px; cursor: pointer; position: relative; font-weight: 700; font-size: 11px;
   padding: 0;
 }
 table.mx td.shiftcell.day { background: rgba(217,131,36,.16); color: var(--shift-day); }
@@ -442,6 +428,9 @@ table.mx td.shiftcell.issel { outline: 2px solid var(--navy); outline-offset: -2
 .mb6 { margin-bottom: 6px; } .mb10 { margin-bottom: 10px; }
 .row { display: flex; align-items: center; gap: 8px; }
 .row.between { justify-content: space-between; }
+.ov-col .row.between { margin-bottom: 6px; }
+.ov-col .row.between .btn.sm { min-height: 30px; padding: 0 10px; font-size: 12.5px; }
+.ov-col .row.between b { font-size: 14px; }
 .grow { flex: 1; min-width: 0; }
 .empty { text-align: center; color: var(--muted); font-size: 13px; padding: 26px 10px; }
 .empty .big { font-size: 30px; display: block; margin-bottom: 6px; opacity: .5; }
