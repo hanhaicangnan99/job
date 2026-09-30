@@ -65,8 +65,10 @@
   function shiftRows(ctx, i) {
     var d = ctx.date;
     var now = ctx.onDutyNow;
-    // 没设过「我的班组」时就没有"我"：不标重点、也不补那一行"休息"
-    var me = ctx.myTeam == null ? null : i;
+    // "我"是**我的班组**（myTeam），不是"正在看的那个班组"（i）——
+    // 切到别人班去看的时候，不能在别人那一行上标"我"。
+    // myTeam 为 null 表示还没认过，那就谁都不标。
+    var me = ctx.myTeam == null ? null : ctx.myTeam;
     var onNow = !!(me != null && now && now.index === me);
     var order = ['夜', '白', '中'];
     var rows = [];
@@ -96,8 +98,9 @@
       });
     }
 
-    // 我这一天休息 → 最后补一行自己的「休息」（只在设过我的班组时才有意义）
-    if (me != null) {
+    // 我这一天休息 → 最后补一行自己的「休息」。
+    // 只有"正在看的就是我的班组"时才补 —— 切到别人班去看时，不能拿我的休息行去顶别人的位置。
+    if (me != null && me === i) {
       var hasMine = false;
       for (var q = 0; q < rows.length; q++) if (rows[q].mine) hasMine = true;
       if (!hasMine) {
