@@ -62,14 +62,15 @@
   /* ==================================================================
    * 3) 本日一览：固定 夜班 → 白班 → 中班
    * ================================================================== */
-  function shiftRows(ctx, i) {
-    var d = ctx.date;
+  /** 某一天在岗的三个班（夜→白→中），按班组视角定"我" */
+  function dayRows(ctx, d) {
     var now = ctx.onDutyNow;
-    // "我"是**我的班组**（myTeam），不是"正在看的那个班组"（i）——
+    // "我"是**我的班组**（myTeam），不是"正在看的那个班组"（ctx.teamIndex）——
     // 切到别人班去看的时候，不能在别人那一行上标"我"。
     // myTeam 为 null 表示还没认过，那就谁都不标。
     var me = ctx.myTeam == null ? null : ctx.myTeam;
-    var onNow = !!(me != null && now && now.index === me);
+    var isTarget = (d === ctx.date);
+    var onNow = !!(me != null && isTarget && now && now.index === me);
     var order = ['夜', '白', '中'];
     var rows = [];
 
@@ -98,17 +99,23 @@
       });
     }
 
-    // 我这一天休息 → 最后永远补一行"我的休息"。
-    // 不管当前在看哪个班组都要补：正看别人班时，"我"也是当天在岗的三个班之一，
-    // 只不过我这一格是"休息"，把它单独列出来才看得见（放在最后一行）。
-    // 这一行长得跟"我上班"那行一样（蓝框加粗），但右边徽章是绿的「休息」、
-    // 左侧颜色条是休息色，所以不会跟"我在上班"混淆。
+    // 我这一天休息 → 补一行"我的休息"。
+    // 补在**我这一格该在的位置**上（不是永远排最后）——这样时间轴才是连贯的：
+    // 夜 → 白 → 中 → （我休）→ 夜 → 白 → …
     if (me != null) {
       var hasMine = false;
       for (var q = 0; q < rows.length; q++) if (rows[q].mine) hasMine = true;
       if (!hasMine) {
-        rows.push({
-          shift: '休', index: me, team: S.team(me).name, range: '', mine: true, rest: true
+        var myPlan = S.shiftOf(d, me);
+        var at = rows.length;
+        for (var r0 = 0; r0 < rows.length; r0++) {
+          var pi = order.indexOf(myPlan);
+          if (pi < 0) break;                       // 计划是"休"，放最后
+          if (order.indexOf(rows[r0].shift) > pi) { at = r0; break; }
+        }
+        rows.splice(at, 0, {
+          shift: '休', index: me, team: S.team(me).name, range: '',
+          mine: true, rest: true, planIndex: order.indexOf(myPlan)
         });
       }
     }
@@ -118,6 +125,55 @@
     }
     return rows;
   }
+
+  /** 时间轴窗口：当前那天前后各展开几天，可以上下滚着看接班关系 */
+  var BEFORE = 2, AFTER = 4;
+
+  /**
+   * 连续时间轴：一条竖着的清单，从「前几天」一直排到「后几天」，
+   * 中间用日期小标签分隔。每一格就是一个班（谁上、几点到几点）。
+   *
+   * 为什么要这样：夜→白→中 是一个**首尾相连的闭环** ——
+   *   中班 18:55 上到次日 02:55 → 夜班 02:55 接上 → 夜班 10:25 交给白班 →
+   *   白班 18:55 交给中班 → …
+   * 只看"当天三行"是切不出接班关系的（我那行在中间时，上下两头都被切断）。
+   * 展开成时间轴后，往下一滚就能看见"谁接我的班"。
+   */
+  function timeline(ctx) {
+    var today = S.todayStr();
+    var blocks = [];
+    for (var n = -BEFORE; n <= AFTER; n++) {
+      var d = S.addDays(ctx.date, n);
+      blocks.push({ d: d, segs: dayRows(ctx, d) });
+    }
+
+    // 把所有格串成一条竖线：┌ 开头、├ 中间、└ 结尾。
+    // 相邻两格就是真实的交接关系（数据层保证 24 小时无缝衔接）——
+    // 前一格的下班时刻 = 后一格的上岗时刻，所以"谁接我的班"就是下一格。
+    var flat = [];
+    for (var b = 0; b < blocks.length; b++) {
+      for (var k = 0; k < blocks[b].segs.length; k++) flat.push(blocks[b].segs[k]);
+    }
+    for (var f = 0; f < flat.length; f++) {
+      flat[f].link = (f === 0) ? TL.FIRST : (f === flat.length - 1 ? TL.LAST : TL.MID);
+    }
+
+    var out = [], idx = 0;
+    for (var b2 = 0; b2 < blocks.length; b2++) {
+      var d2 = blocks[b2].d;
+      out.push('<div class="daysep' + (d2 === ctx.date ? ' cur' : '') + '" data-anchor="' +
+        (d2 === ctx.date ? '1' : '0') + '" data-day="' + d2 + '">' +
+        '<span class="dsdate">' + S.mdLabel(d2) + '</span>' +
+        '<span class="dswd">' + S.weekday(d2) + '</span>' +
+        (d2 === today ? '<span class="dstoday">今天</span>' : '') +
+        '</div>');
+      for (var k2 = 0; k2 < blocks[b2].segs.length; k2++) out.push(shiftRow(flat[idx++]));
+    }
+    return out.join('');
+  }
+
+  // 让整条时间轴看起来是"一列"
+  var TL = { FIRST: '┌', MID: '├', LAST: '└' };
 
   function shiftRow(r) {
     var cls = 'hrow s-' + S.SHIFT_CLASS[r.shift]
@@ -130,7 +186,10 @@
     //            这样"我在休息"跟"我在上班"一眼分得开，不会看成正在看的那个班在上班
     var tag = '';
     if (r.mine) tag = r.rest ? '我 · 休' : (r.now ? '我 · 在岗' : '我');
-    return '<div class="' + cls + '">' +
+    // 时间轴的连接符（data-link）留着给测试和读屏用；
+    // 视觉上的"一条链"由 .hlist 左侧那条轨道线画出来（见 styles.css）
+    var link = r.link ? ' data-link="' + r.link + '"' : '';
+    return '<div class="' + cls + '"' + link + '>' +
       '<div class="hname">' + U.esc(r.team) +
       (tag ? '<span class="htag">' + U.esc(tag) + '</span>' : '') + '</div>' +
       '<div class="hmid">' +
@@ -226,9 +285,9 @@
     out.push('<div class="main-col">');
     out.push(bigDate(ctx));
     out.push(teamPick(ctx));
-    // 班次卡：头上写明"正在看的这个班组今天什么班"，下面 夜/白/中 三行（我休息时多一行）
+    // 班次卡：头上写明"正在看的这个班组今天什么班"，下面是可以上下滚的连续时间轴
     out.push('<div class="card tight rows-card">' + teamToday(ctx) +
-      '<div class="hlist">' + shiftRows(ctx, i).map(shiftRow).join('') + '</div></div>');
+      '<div class="hlist" id="rowsList">' + timeline(ctx) + '</div></div>');
     out.push('</div>');
     out.push('<div class="ov-col">' + overview(ctx) + '</div>');
     return out.join('');

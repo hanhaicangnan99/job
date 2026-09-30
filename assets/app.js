@@ -25,6 +25,13 @@
 
   var VIEWS = ['shift'];              // 只有一页（总貌画在同一页下面）
 
+  /**
+   * 下一次渲染要不要把时间轴对准"当前那天"。
+   * 换日期 / 换班组 / 首次打开 → true（重新对准）；
+   * 其它重渲染（认班组、翻月份、…）→ false（保持用户滚到的位置）。
+   */
+  var ALIGN_DAY = true;
+
   var elView, elAppbar, elBanner;
   /* ---------------- 小工具 ---------------- */
   function lsGet(k) {
@@ -178,17 +185,45 @@
     var view = root.Shift.Views.shift;
     var c = ctx();
 
+    // 时间轴的滚动位置要在重建 DOM 前后接上：
+    //   · 换日期 / 换班组 → 重新对准"当前那天"（alignDay = true）
+    //   · 只是重新渲染（比如认了"我的班组"）→ 保持用户当前滚到哪
+    var prevList = document.getElementById('rowsList');
+    var keepTop = prevList ? prevList.scrollTop : -1;
+
     // 先拼成片段再挂进去：这样即使某次渲染返回空串，也不会把旧内容清成一片空白
     var holder = U.node('<div>' + view.render(c) + '</div>');
     elView.innerHTML = '';
     if (holder) elView.appendChild(holder);
     if (view.mount) view.mount(elView, c);
 
+    syncTimeline(keepTop);
+
     // 顶栏只有标题，没有副标题
     var title = document.getElementById('title');
     if (title) title.textContent = '倒班日历';
 
     if (y) window.scrollTo(0, Math.min(y, document.body.scrollHeight));
+  }
+
+  /**
+   * 时间轴渲染完之后对位置：
+   *   alignDay=true（换了日期/班组）→ 把"当前那天"的日期标签对到列表顶部；
+   *   否则沿用原来滚到的位置，别乱跳。
+   */
+  function syncTimeline(keepTop) {
+    var list = document.getElementById('rowsList');
+    if (!list) return;
+    if (ALIGN_DAY || keepTop < 0) {
+      var anchor = list.querySelector('[data-anchor="1"]');
+      // 让"当前那天"的标签贴在顶部，然后**回退一格**，
+      // 这样往上一滚就能看到"交班给我的人"（上一个班）
+      var prev = anchor && anchor.previousElementSibling;
+      list.scrollTop = prev ? prev.offsetTop : (anchor ? anchor.offsetTop : 0);
+    } else {
+      list.scrollTop = keepTop;
+    }
+    ALIGN_DAY = false;
   }
 
   function renderBanner() {
@@ -301,6 +336,7 @@
     if (!S.isValidDate(d)) return;
     App.date = d;
     App.month = { y: +d.slice(0, 4), m: +d.slice(5, 7) };
+    ALIGN_DAY = true;                  // 换日期 → 时间轴重新对准"当前那天"
     writeHash(true);
     render();
   };
@@ -308,6 +344,7 @@
   App.setTeam = function (i) {
     App.team = S.idxOf(i);
     lsSet(KEY_TEAM, App.team);
+    ALIGN_DAY = true;                  // 换班组 → 也重新对准
     writeHash(true);
     render();
   };

@@ -79,12 +79,9 @@ button, input, select { font: inherit; color: inherit; }
 
 /* ===================== 页面骨架：把总貌钉在页面下方 ===================== */
 /*
- * 目标：**一屏看全，不用滑**。数字都是 390×844 实测出来的，不是估的：
- *   班次卡 hlist = 251px（4 行时的自然高度）→ 设成 min-height，
- *     3 行时多出来的 77px 用 justify-content: center 摊到上下，整张卡恒定 312px；
- *   总貌那一块（月份行 + 表格 159 + 上下留白）≈ 200px。
- * 所以主列（日期 + 班组 + 班次卡）撑满「视口高 − 200px」，
- * 总貌用 margin-top: auto 沉到剩余空间底部，贴住视口下沿。
+ * 目标：**一屏看全，不用滑**（除了班次那一块自己要上下滚）。
+ *   班次时间轴固定高度 205px（约 4 行多），内部自己滚，所以卡高恒定、总貌不跳；
+ *   总貌那一块（月份行 + 表格 + 留白）≈ 200px。
  */
 .main-col { display: flex; flex-direction: column; }
 .ov-col {
@@ -93,7 +90,7 @@ button, input, select { font: inherit; color: inherit; }
   padding-top: 4px;
   box-shadow: 0 -6px 12px -8px rgba(22, 32, 43, .18);
 }
-.hlist { min-height: 225px; justify-content: center; }
+/* 时间轴高度就写在这一条里（见下面 .hlist 的定义） */
 
 /* ===================== 日期条 / 班组条：高度固定，不随内容变 ===================== */
 .datebar2 { min-height: 46px; }
@@ -153,13 +150,46 @@ button, input, select { font: inherit; color: inherit; }
 .bigdate .bd-rel .todaytag { color: var(--ok); font-weight: 600; }
 
 /* ===================== 交班一览 ===================== */
-.hlist { display: flex; flex-direction: column; gap: 5px; }
+/* 连续时间轴：上下滚着看接班关系（夜→白→中→夜… 首尾相连） */
+.hlist {
+  display: flex; flex-direction: column; gap: 5px;
+  height: 205px; overflow-y: auto; overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  /* 上下留一点淡出，看起来像"还能继续滚"（淡出范围别太大，免得把内容吃掉） */
+  mask-image: linear-gradient(180deg, transparent 0, #000 7px, #000 calc(100% - 7px), transparent 100%);
+  -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 7px, #000 calc(100% - 7px), transparent 100%);
+}
+.hlist::-webkit-scrollbar { display: none; }
+
+/* 日期分隔标签 */
+.daysep {
+  display: flex; align-items: center; gap: 6px;
+  padding: 5px 2px 1px; flex: none;
+}
+.daysep .dsdate { font-size: 12.5px; font-weight: 700; color: var(--ink-2); }
+.daysep .dswd { font-size: 11.5px; color: var(--muted); }
+.daysep .dstoday {
+  font-size: 10.5px; font-weight: 600; color: #fff; background: var(--ok);
+  border-radius: 999px; padding: 1px 7px;
+}
+.daysep.cur .dsdate { color: var(--navy); }
+.daysep.cur::after {
+  content: ''; flex: 1; height: 1px; background: var(--line-2);
+}
 .hrow {
   display: flex; align-items: center; gap: 10px;
   border: 1px solid var(--line); border-radius: var(--r-sm);
   padding: 7px 11px; background: #fbfcfe;
 }
 .hrow .hname { flex: none; width: 84px; font-size: 13.5px; font-weight: 600; color: var(--ink-2); white-space: nowrap; }
+/* 时间轴的连接符：┌ ├ └ —— 把这一列画成"一条链"。
+   用伪元素绝对定位，不参与 flex 布局，所以不会被宽度/裁剪吃掉。 */
+.hrow[data-link]::before { content: none; }
+.hrow { position: relative; }
+/* 时间轴左边那条贯穿的轨道线：画在**滚动容器**上，所以它不跟着内容滚，
+   视觉上就是"夜→白→中→夜…"一路串下去的一条链。 */
+.hlist { border-left: 2px solid #d3dce7; padding-left: 11px; }
 .hrow .hmid { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .hrow .htime { font-size: 13px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
 .hrow .htag {
