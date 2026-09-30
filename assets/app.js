@@ -35,6 +35,14 @@
   /** 时间轴当前覆盖的日期范围（定位后才知道；滚动跟随用它兜底） */
   var RANGE_MIN = null, RANGE_MAX = null;
 
+  /**
+   * 正在重建 DOM（render 里面）。
+   * 重建时会把时间轴的 scrollTop 再设一次，从而触发一次 scroll 事件；
+   * 那次是程序引起的，绝不能更新日期/月份 —— 否则"滚过时间轴之后点上月/下月就失效"
+   * （刚设好的月份会立刻被拽回时间轴那个月）。
+   */
+  var IN_RENDER = false;
+
   var elView, elAppbar, elBanner;
   /* ---------------- 小工具 ---------------- */
   function lsGet(k) {
@@ -190,9 +198,17 @@
 
     // 时间轴的滚动位置要在重建 DOM 前后接上：
     //   · 换日期 / 换班组 → 重新对准"当前那天"（alignDay = true）
-    //   · 只是重新渲染（比如认了"我的班组"）→ 保持用户当前滚到哪
+    //   · 只是重新渲染（翻月份、认班组…）→ 保持用户当前滚到哪
     var prevList = document.getElementById('rowsList');
     var keepTop = prevList ? prevList.scrollTop : -1;
+
+    // ⚠ 重建 DOM 时把旧 scrollTop 恢复回去，本身也会触发一次 scroll 事件。
+    //   那次事件里 dayAtTop 会读到"时间轴顶部那天"，把 App.date / App.month 改掉 ——
+    //   于是滚过时间轴之后点「上月」，刚设好的月份立刻被拽回时间轴那个月（按钮像失效了）。
+    //   所以挂个闸门（IN_RENDER），把重建引起的那次滚动忽略掉。
+    var prevList = document.getElementById('rowsList');
+    var keepTop = prevList ? prevList.scrollTop : -1;
+    IN_RENDER = true;
 
     // 先拼成片段再挂进去：这样即使某次渲染返回空串，也不会把旧内容清成一片空白
     var holder = U.node('<div>' + view.render(c) + '</div>');
@@ -201,6 +217,12 @@
     if (view.mount) view.mount(elView, c);
 
     syncTimeline(keepTop);
+    // 布局落定之后再撤闸门（scroll 事件是在当前任务之后派发的）。
+    // 两条路都走：rAF 通常在下一帧，setTimeout 兜底（也照顾没有 rAF 的环境）。
+    if (typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(function () { IN_RENDER = false; });
+    }
+    setTimeout(function () { IN_RENDER = false; }, 120);
 
     // 顶栏只有标题，没有副标题
     var title = document.getElementById('title');
@@ -363,6 +385,8 @@
     if (list.__bound) return;
     list.__bound = true;
     list.addEventListener('scroll', function () {
+      // 正在重建 DOM（或紧跟其后的那次恢复滚动）→ 不是用户滚的，日期/月份都不动
+      if (IN_RENDER) return;
       // 还在我们设的那个位置附近（1px 容差）→ 这次滚动是程序引起的，日期不动。
       // 另外必须 __aligned（列表已经在页面上、有布局）：
       //   渲染中间列表有一瞬间脱离文档，此时几何全是 0，读出来会把日期改成缓冲区的第一天。
