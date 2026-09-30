@@ -120,20 +120,25 @@ button, input, select { font: inherit; color: inherit; }
 }
 
 /* 点一下直接跳回我的班组（常驻，切到别的班组时它会提示"点我回去"） */
+/* 点一下跳回我的班组；还没设过时是虚线空按钮，点它去设置。
+   宽度做窄（一行只放「我的」两个字），不假设用户是哪个班组。 */
 .myjump {
-  flex: none; width: 74px; border-radius: 9px; border: 1px dashed var(--line-2);
+  flex: none; width: 46px; border-radius: 9px; border: 1px dashed var(--line-2);
   background: #f4f7fb; color: var(--ink-2);
   display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 2px; padding: 3px 3px;
+  gap: 1px; padding: 3px 3px; touch-action: manipulation;
 }
-.myjump em { font-style: normal; font-size: 9.5px; color: var(--muted); line-height: 1.2; }
-.myjump b { font-size: 11px; font-weight: 700; line-height: 1.25; white-space: nowrap; }
+.myjump em { font-style: normal; font-size: 12px; font-weight: 700; line-height: 1.2; color: var(--ink-2); }
 .myjump:active { background: #e8eef7; }
 .myjump.on {
-  border: 1px solid var(--navy); border-style: solid;
+  border: 1px solid var(--navy);
   background: var(--navy); color: #fff;
 }
-.myjump.on em { color: rgba(255,255,255,.8); }
+.myjump.on em { color: #fff; }
+.myjump.empty { border-color: var(--line-2); background: #fff; }
+.myjump.empty em { color: var(--muted); font-weight: 600; }
+/* 手指按下时给个"正在长按"的反馈 */
+.teampick button.pressing { border-color: var(--navy); background: #eef3fb; }
 .teampick button .ic.day { background: rgba(217,131,36,.16); color: var(--shift-day); }
 .teampick button .ic.mid { background: rgba(154,75,191,.16); color: var(--shift-mid); }
 .teampick button .ic.night { background: rgba(91,75,196,.16); color: var(--shift-night); }
@@ -389,6 +394,17 @@ table.mx td.shiftcell .c1 {
 /* 总貌里「我正在看的那一天」那一列 */
 table.mx thead th.issel { background: #dce8f9; color: var(--navy); }
 table.mx td.shiftcell.issel { outline: 2px solid var(--navy); outline-offset: -2px; }
+
+/* ===================== 选「我的班组」弹层 ===================== */
+.mygrid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.mybtn {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  background: #fff; border: 1px solid var(--line-2); border-radius: var(--r-sm);
+  padding: 12px 12px; min-height: 52px;
+}
+.mybtn b { font-size: 14px; font-weight: 600; }
+.mybtn .myic { font-size: 12px; padding: 3px 8px; border-radius: 999px; }
+.mybtn:active { background: #eef3fb; border-color: var(--navy); }
 
 /* ===================== 弹层 ===================== */
 .mask {

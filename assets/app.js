@@ -96,6 +96,7 @@
     if (!App.month) App.month = { y: +App.date.slice(0, 4), m: +App.date.slice(5, 7) };
 
     bindGlobals();
+    bindLongPress();
     render();
 
     window.addEventListener('popstate', function (ev) {
@@ -206,6 +207,46 @@
   }
 
   /* ---------------- 事件 ---------------- */
+  /**
+   * 长按班组按钮 = 把那个班组设成「我的」。
+   * 用 pointer 事件同时覆盖手指和鼠标；移动超过 12px 或松手就取消。
+   */
+  function bindLongPress() {
+    var timer = null, btn = null, x0 = 0, y0 = 0, firedAt = 0;
+    function cancel() {
+      if (timer) { clearTimeout(timer); timer = null; }
+      if (btn) { btn.classList.remove('pressing'); btn = null; }
+    }
+    elView.addEventListener('pointerdown', function (e) {
+      var b = e.target.closest && e.target.closest('.teampick button[data-team]');
+      if (!b) return;
+      btn = b; x0 = e.clientX; y0 = e.clientY;
+      b.classList.add('pressing');
+      timer = setTimeout(function () {
+        timer = null;
+        firedAt = Date.now();
+        if (navigator.vibrate) { try { navigator.vibrate(15); } catch (x) {} }
+        App.setMyTeam(+b.dataset.team);   // 会重新渲染，按下的 class 自然没了
+        btn = null;
+      }, 480);
+    });
+    elView.addEventListener('pointermove', function (e) {
+      if (!btn) return;
+      if (Math.abs(e.clientX - x0) > 12 || Math.abs(e.clientY - y0) > 12) cancel();
+    }, { passive: true });
+    elView.addEventListener('pointerup', cancel);
+    elView.addEventListener('pointercancel', cancel);
+    elView.addEventListener('pointerleave', cancel);
+    // 长按已经处理过了，紧接着的那次 click 要丢掉，不然会顺手切成"看那个班组"
+    elView.addEventListener('click', function (e) {
+      if (Date.now() - firedAt < 700) {
+        firedAt = 0;
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    }, true);
+  }
+
   function bindGlobals() {
     // 视图里所有 data-* 动作统一在这里分发（日期条和班组条都挪进视图了，所以都在这一条里）
     elView.addEventListener('click', function (e) {
@@ -220,6 +261,7 @@
       if (!act || act === 'actions') return;
       if (act === 'today') { App.setDate(S.todayStr()); return; }
       if (act === 'pick-date') { openDatePicker(); return; }
+      if (act === 'set-my-team') { openMyTeamPicker(); return; }
       if (act === 'prev-month') { App.setMonth(App.month.y, App.month.m - 1); return; }
       if (act === 'next-month') { App.setMonth(App.month.y, App.month.m + 1); return; }
       if (act === 'install-hide' || act === 'install') { hideBanner(); return; }
@@ -237,7 +279,7 @@
     var sx = 0, sy = 0, sw = false;
     document.addEventListener('touchstart', function (e) {
       if (U.$('.mask')) { sw = false; return; }
-      if (e.target.closest('.tbl-wrap, .mxwrap, input, textarea, select, .sheet, .teampick')) { sw = false; return; }
+      if (e.target.closest('.tbl-wrap, .mxwrap, input, textarea, select, .sheet, .teampick, .teamrow')) { sw = false; return; }
       var t = e.touches[0];
       sx = t.clientX; sy = t.clientY; sw = true;
     }, { passive: true });
@@ -329,6 +371,30 @@
         { label: '回到今天', onClick: function () { App.setDate(S.todayStr()); } },
         { label: '关掉' }
       ]
+    });
+  }
+
+  /** 选「我的班组」：不预设任何人是谁，让用户自己点 */
+  function openMyTeamPicker() {
+    U.sheet({
+      title: '你是哪个班组？',
+      sub: '设好之后页面上会重点标出你的班（也可以长按班组按钮快速设置）',
+      body: '<div class="mygrid">' + S.TEAMS.map(function (name, i) {
+        var sh = S.shiftOf(App.date, i);
+        return '<button type="button" class="mybtn" data-my="' + i + '">' +
+          '<b>' + U.esc(name) + '</b>' +
+          '<span class="myic ' + S.SHIFT_CLASS[sh] + '">' + U.esc(S.SHIFT_NAME[sh]) + '</span>' +
+          '</button>';
+      }).join('') + '</div>',
+      onMount: function (rootEl, close) {
+        rootEl.addEventListener('click', function (e) {
+          var b = e.target.closest('[data-my]');
+          if (!b) return;
+          App.setMyTeam(+b.dataset.my);
+          close();
+        });
+      },
+      actions: [{ label: '关掉' }]
     });
   }
 

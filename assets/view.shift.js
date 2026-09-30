@@ -37,33 +37,37 @@
 
   /* ==================================================================
    * 2) 班组选择器（牌子上的班次跟着所看日期变）
-   *    右边常驻一个「我的」按钮，点一下直接跳回我的班组。
+   *    右边一个常驻的「我的」按钮：设过了就点它跳回我的班组，
+   *    没设过就点它去设置（不预设任何人是谁 —— 用户不一定是二值班）。
    *    注意：原来贴在按钮右上角的「我的」小标已经去掉 ——
    *    那一行是横向滚动容器（overflow-x:auto），负偏移的标会被裁掉一半。
    * ================================================================== */
-  function myTeamIndex(ctx) {
-    return ctx.myTeam == null ? S.MY_TEAM : ctx.myTeam;
-  }
-
   function teamPick(ctx) {
     var d = ctx.date;
-    var mine = myTeamIndex(ctx);
+    var mine = ctx.myTeam;                    // null = 还没设过
     var buttons = S.TEAMS.map(function (name, i) {
       var sh = S.shiftOf(d, i);
       var isMe = i === mine;
       return '<button type="button" data-team="' + i + '"' +
         (i === ctx.teamIndex ? ' class="on"' : '') +
-        ' aria-label="' + U.esc(name + (isMe ? '（我的班组）' : '')) + '">' +
+        ' aria-label="' + U.esc(name + (isMe ? '（我的班组）' : '') + '，长按设为我的班组') + '">' +
         '<b>' + U.esc(name) + '</b>' +
         '<span class="ic ' + S.SHIFT_CLASS[sh] + '">' + U.esc(S.SHIFT_BADGE[sh]) + '</span>' +
         '</button>';
     }).join('');
 
+    var chip;
+    if (mine == null) {
+      chip = '<button type="button" class="myjump empty" data-act="set-my-team"' +
+        ' aria-label="设置我的班组"><em>我的</em></button>';
+    } else {
+      chip = '<button type="button" class="myjump' + (ctx.teamIndex === mine ? ' on' : '') + '"' +
+        ' data-team="' + mine + '"' +
+        ' aria-label="回到我的班组 ' + U.esc(S.TEAMS[mine]) + '"><em>我的</em></button>';
+    }
+
     return '<div class="teamrow">' +
-      '<div class="teampick">' + buttons + '</div>' +
-      '<button type="button" class="myjump' + (ctx.teamIndex === mine ? ' on' : '') + '"' +
-      ' data-team="' + mine + '" aria-label="回到我的班组 ' + U.esc(S.TEAMS[mine]) + '">' +
-      '<em>我的</em><b>' + U.esc(S.TEAMS[mine]) + '</b></button>' +
+      '<div class="teampick">' + buttons + '</div>' + chip +
       '</div>';
   }
 
@@ -73,7 +77,9 @@
   function shiftRows(ctx, i) {
     var d = ctx.date;
     var now = ctx.onDutyNow;
-    var onNow = !!(now && now.index === i);
+    // 没设过「我的班组」时就没有"我"：不标重点、也不补那一行"休息"
+    var me = ctx.myTeam == null ? null : i;
+    var onNow = !!(me != null && now && now.index === me);
     var order = ['夜', '白', '中'];
     var rows = [];
 
@@ -98,21 +104,23 @@
       rows.push({
         shift: sh, index: who, team: S.team(who).name,
         range: startedPrev ? ('18:55-次日' + S.hhmm(sp.end)) : S.mmRange(sp.start, sp.end),
-        mine: who === i
+        mine: me != null && who === me
       });
     }
 
-    // 我这一天休息 → 最后补一行自己的「休息」
-    var hasMine = false;
-    for (var q = 0; q < rows.length; q++) if (rows[q].mine) hasMine = true;
-    if (!hasMine) {
-      rows.push({
-        shift: '休', index: i, team: S.team(i).name, range: '', mine: true, rest: true
-      });
+    // 我这一天休息 → 最后补一行自己的「休息」（只在设过我的班组时才有意义）
+    if (me != null) {
+      var hasMine = false;
+      for (var q = 0; q < rows.length; q++) if (rows[q].mine) hasMine = true;
+      if (!hasMine) {
+        rows.push({
+          shift: '休', index: me, team: S.team(me).name, range: '', mine: true, rest: true
+        });
+      }
     }
 
     for (var r2 = 0; r2 < rows.length; r2++) {
-      if (onNow && rows[r2].index === i && !rows[r2].rest) { rows[r2].now = true; rows[r2].range = now.range; }
+      if (onNow && rows[r2].index === me && !rows[r2].rest) { rows[r2].now = true; rows[r2].range = now.range; }
     }
     return rows;
   }
