@@ -32,6 +32,9 @@
    */
   var ALIGN_DAY = true;
 
+  /** 时间轴当前覆盖的日期范围（定位后才知道；滚动跟随用它兜底） */
+  var RANGE_MIN = null, RANGE_MAX = null;
+
   var elView, elAppbar, elBanner;
   /* ---------------- 小工具 ---------------- */
   function lsGet(k) {
@@ -208,28 +211,57 @@
 
   /**
    * 时间轴渲染完之后对位置：
-   *   alignDay=true（换了日期/班组）→ 把"当前那天"的日期标签对到列表顶部，
-   *     这样它的三行正好落在可视区里；再往上滑一点就是"交班给我的人"。
+   *   alignDay=true（换了日期/班组）→ 把"当前那天"的日期标签和它的行放好。
    *   否则沿用原来滚到的位置，别乱跳。
+   *
+   * ⚠ 这里是**程序性滚动**，会触发一次 scroll 事件。那一次必须整个跳过：
+   *   · infiniteShift 会以为你滚到了边界，给 scrollTop 加/减一整个周期（1967px），
+   *     画面被拖到两三天之后 —— 用户报的"点 10月3日 却显示 10月5日"就是这个；
+   *   · dayAtTop 也会顺手改掉 App.date。
+   * 用 __skipTo 记住我们设到的位置：紧接着那次 scroll 如果正好在这个位置，就跳过。
+   * （不用 setTimeout/标志位 —— 浏览器派发 scroll 的时机不保证在定时器之前。）
    */
   function syncTimeline(keepTop) {
     var list = document.getElementById('rowsList');
     if (!list) return;
     if (ALIGN_DAY || keepTop < 0) {
       var anchor = list.querySelector('.daysep.cur') || list.querySelector('.daysep[data-day="' + App.date + '"]');
-      // 目标：当前那天的三行**完整**落在可视区里（标签 + 三行 222px > 可视区 205px，
-      // 所以标签会刚好露在顶边上沿之外，这是必然的折中）。
-      // 精确滚到"当天第一行的顶边"。
-      var firstRow = anchor && anchor.nextElementSibling;
-      var y;
-      if (firstRow && firstRow.classList && firstRow.classList.contains('hrow')) {
-        y = firstRow.offsetTop;
+      var y = anchor ? innerOffset(list, anchor) : -1;
+      // 这一天可能有三行、也可能有四行（我休息时会多一行"我 · 休"）。
+      // 整块（标签 + 所有行）比可视区高时，把落点往下让一点，
+      // 优先保证"当天的行都看得见"（标签被顶掉一点点没关系）。
+      // 上限：块的底边不能超过可视区底边，再多让就把下一节挤进来了。
+      var blockEnd = y;                        // 块的底 = 下一天标签的顶边
+      var sib = anchor && anchor.nextElementSibling;
+      while (sib && sib.classList && !sib.classList.contains('daysep')) sib = sib.nextElementSibling;
+      if (sib) blockEnd = innerOffset(list, sib);
+      var maxY = blockEnd - list.clientHeight;
+      if (maxY > y) y = maxY;
+      // ⚠ y 可能是负的：渲染刚换完 DOM、布局还没稳（或这一天在可见范围之外，
+      //   内偏移算出来是个负值）。这时设 scrollTop 会被夹到 0，画面跳到时间轴最早那几天，
+      //   紧接着的 scroll 事件就把日期也改成那天了 —— 用户报的"点某天显示别的天"。
+      //   宁可不定位，也不能跳到一个错的日子上。
+      if (y >= 0) {
+        list.scrollTop = y;
+        // 记住"我们自己设到的位置"：只要 scrollTop 还等于它，说明这次滚动是我们引起的，
+        // 不当作"用户滚到了别的日子"。等用户真滚动时 scrollTop 就变了，闸门自然失效。
+        list.__ownTop = list.scrollTop;
+        // 还要确认"列表真的在页面上、有布局"：
+        // 渲染过程中列表有一瞬间是脱离文档的，那时 getBoundingClientRect 全是 0，
+        // 紧接着到达的 scroll 事件会读到假几何、把日期改成缓冲区的第一天（实测变成 9/12）。
+        list.__aligned = list.getBoundingClientRect().height > 0;
       } else {
-        y = anchor ? anchor.offsetTop : 0;
+        list.__ownTop = null;
+        list.__aligned = false;
       }
-      list.scrollTop = y;
+      var seps = list.querySelectorAll('.daysep');
+      if (seps.length) {
+        RANGE_MIN = seps[0].dataset.day;
+        RANGE_MAX = seps[seps.length - 1].dataset.day;
+      }
     } else {
       list.scrollTop = keepTop;
+      list.__skipTo = null;
     }
     ALIGN_DAY = false;
     bindTimelineScroll(list);
@@ -238,31 +270,69 @@
   /* ---------------- 时间轴滚动：日期跟着走 + 无限滚 ---------------- */
 
   /**
-   * 可视区最上面那一格属于哪一天。
-   * 按"块"来判：找**最后一天**，它的范围还没在滚动位置之前结束。
-   * 也就是"这一天的行还占着视口上部"就算它。
+   * 某个元素在滚动容器里的"真实"偏移。
    *
-   * ⚠ 不能用"标签有没有滚出去"来判：标签 + 三行有 222px，而可视区只有 205px，
-   *   所以定位到某天时它的标签必然在顶边上沿之外 —— 那样判就会跳到下一天，
-   *   紧接着的 scroll 事件把日期改掉，就是"选 10月3日却显示 10月4日"的根因。
+   * ⚠ 不能用 el.offsetTop：它的参照物是最近的定位祖先，而这里是 .card（position 相关），
+   *   不是滚动容器 #rowsList —— 实测差 253px（约两天），就会让定位整体偏两天
+   *   （用户报的"点 10月3日 却显示 10月5日"）。用 clientTop + 矩形差才准。
    */
+  function innerOffset(list, el) {
+    var lr = list.getBoundingClientRect();
+    var er = el.getBoundingClientRect();
+    return (er.top - lr.top) + list.scrollTop - list.clientTop;
+  }
+
+  /** 一屏里最上面那一格属于哪一天（按"块"判：这一天的行还占着视口上部就算它） */
   function dayAtTop(list) {
     var seps = list.querySelectorAll('.daysep');
-    var top = list.scrollTop;
+    if (!seps.length) return null;
+    var lr = list.getBoundingClientRect();
     for (var i = 0; i < seps.length; i++) {
+      var r = seps[i].getBoundingClientRect();
+      // 这一天的标签在顶边之下，或者它已经滚过顶边（那它的行就占着上半屏）
+      if (r.top >= lr.top - 1) return seps[i].dataset.day;
       var next = seps[i + 1];
-      var end = next ? next.offsetTop : list.scrollHeight;
-      if (end > top + 1) return seps[i].dataset.day;   // 这一天的行还占着视口
+      if (next && next.getBoundingClientRect().top > lr.top + 1) return seps[i].dataset.day;
     }
-    return seps.length ? seps[seps.length - 1].dataset.day : null;
+    return seps[seps.length - 1].dataset.day;
+  }
+
+  /**
+   * 无限滚：时间轴画的是 5 个完整 10 天周期（排版完全一样）。
+   * 滚到贴近上/下边界时，把 scrollTop 平移一个周期的高度 —— 画面一模一样，看不出接缝。
+   */
+  function infiniteShift(list) {
+    if (list.__shifting) return;
+    var seps = list.querySelectorAll('.daysep');
+    if (seps.length < 20) return;
+    var cycle = innerOffset(list, seps[10]) - innerOffset(list, seps[0]);
+    if (cycle <= 0) return;
+    // 缓冲区比一屏高一点就够，不要用一整个周期 ——
+    // 否则"定位到某一天"这种正常滚动也会被误判成撞边界。
+    var margin = Math.max(200, list.clientHeight);
+    list.__shifting = true;
+    try {
+      var max = list.scrollHeight - list.clientHeight;
+      if (list.scrollTop < margin) list.scrollTop += cycle;
+      else if (list.scrollTop > max - margin) list.scrollTop -= cycle;
+    } finally {
+      list.__shifting = false;
+    }
   }
 
   /**
    * 滚到某个日期 → 更新大日期 / 地址栏 / 卡片头，但**不重建 DOM**。
    * 重建的话滚动位置会乱跳，而且这里本来就是"你滚到哪就是哪天"。
+   *
+   * 只有**用户真的滚了**才会走到这里：定位用的那次滚动被 __skipTo 挡掉了，
+   * 定位不到锚点（比如刚翻月份）时 scrollTop 兜底会跳到 0，那种情况也不该改日期。
    */
   function applyDateFromScroll(d) {
     if (!d || d === App.date) return;
+    var list = document.getElementById('rowsList');
+    if (!list || list.scrollTop <= 1) return;      // 兜底跳到顶了，不是用户滚的
+    if (!RANGE_MIN || !RANGE_MAX) return;          // 还没定位过
+    if (d < RANGE_MIN || d > RANGE_MAX) return;    // 落在时间轴覆盖范围之外
     App.date = d;
     App.month = { y: +d.slice(0, 4), m: +d.slice(5, 7) };
     writeHash(true);
@@ -292,18 +362,20 @@
   function bindTimelineScroll(list) {
     if (list.__bound) return;
     list.__bound = true;
-    var raf = 0;
     list.addEventListener('scroll', function () {
-      // 无限滚的平移必须**立刻**做：拖到底再补就晚了（会先闪出边界）。
-      // 它只读几个 offsetTop，很便宜。
+      // 还在我们设的那个位置附近（1px 容差）→ 这次滚动是程序引起的，日期不动。
+      // 另外必须 __aligned（列表已经在页面上、有布局）：
+      //   渲染中间列表有一瞬间脱离文档，此时几何全是 0，读出来会把日期改成缓冲区的第一天。
+      // 用容差而不是相等：浏览器会把 scrollTop 取整/夹取，差一点点是很常见的。
+      if (list.__aligned && list.__ownTop != null && Math.abs(list.scrollTop - list.__ownTop) <= 1) return;
+      if (!list.getBoundingClientRect().height) return;   // 没布局，这次事件不作数
+      list.__ownTop = null;                     // 位置真的变了 = 用户滚的，往下正常处理
+      // 全部同步做完，**不要**延到 requestAnimationFrame：
+      //   rAF 回调里再读 scrollTop/rect 时，DOM 可能已经被后面那次渲染换掉了（渲染是同步的），
+      //   于是读到"别人的"位置，日期被改成莫名其妙的一天。
+      //   这两件事都很轻：一次平移 + 几次 rect。
       infiniteShift(list);
-      // 日期跟随可以延到下一帧（要换 DOM，别在滚动事件里同步干重活）
-      if (raf) return;
-      raf = requestAnimationFrame(function () {
-        raf = 0;
-        infiniteShift(list);
-        applyDateFromScroll(dayAtTop(list));
-      });
+      applyDateFromScroll(dayAtTop(list));
     }, { passive: true });
   }
 
@@ -321,19 +393,15 @@
     if (seps.length < 20) return;
     var cycle = seps[10].offsetTop - seps[0].offsetTop;
     if (cycle <= 0) return;
+    // 缓冲区只要比一屏高一点就够（够"回一屏还能继续滚"），
+    // 不要用一整个周期 —— 那样会把"定位到某一天"这种正常滚动也判成撞边界。
+    var margin = Math.max(200, list.clientHeight);
     list.__shifting = true;
     try {
-      var guard = 0;
-      while (guard++ < 4) {
-        var max = list.scrollHeight - list.clientHeight;
-        if (list.scrollTop < cycle) {
-          list.scrollTop += cycle;
-        } else if (list.scrollTop > max - cycle) {
-          list.scrollTop -= cycle;
-        } else {
-          break;                              // 已经在中间安全区，不用动
-        }
-      }
+      var max = list.scrollHeight - list.clientHeight;
+      // 只有确实贴边了才平移（用 if 而不是 while，避免来回抖动）
+      if (list.scrollTop < margin) list.scrollTop += cycle;
+      else if (list.scrollTop > max - margin) list.scrollTop -= cycle;
     } finally {
       list.__shifting = false;
     }
@@ -448,6 +516,7 @@
   App.setDate = function (d) {
     if (!S.isValidDate(d)) return;
     App.date = d;
+    // 月份跟着日期走 —— 总貌图、月历都以 App.month 为准，不跟就会错位
     App.month = { y: +d.slice(0, 4), m: +d.slice(5, 7) };
     ALIGN_DAY = true;                  // 换日期 → 时间轴重新对准"当前那天"
     writeHash(true);
@@ -470,10 +539,15 @@
     lsSet(KEY_MY, App.myTeam);
     render();
   };
+  /**
+   * 点总貌图的"上月/下月"。日期本身不变 → 时间轴不重新定位，
+   * 但月份要跟着走，否则总貌图和日期就对不上了。
+   */
   App.setMonth = function (y, m) {
     while (m < 1) { m += 12; y--; }
     while (m > 12) { m -= 12; y++; }
     App.month = { y: y, m: m };
+    ALIGN_DAY = false;
     render();
   };
   App.refresh = function () { render(); };

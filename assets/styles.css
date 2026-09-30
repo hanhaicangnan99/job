@@ -152,7 +152,7 @@ button, input, select { font: inherit; color: inherit; }
 /* ===================== 交班一览 ===================== */
 /* 连续时间轴：上下滚着看接班关系（夜→白→中→夜… 首尾相连） */
 .hlist {
-  display: flex; flex-direction: column; gap: 5px;
+  display: flex; flex-direction: column; gap: 4px;
   height: 205px; overflow-y: auto; overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
